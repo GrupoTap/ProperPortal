@@ -1,0 +1,1298 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="light">
+<title>Portal do Cliente · Proper Compressores</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+  PORTAL DO CLIENTE — Proper Compressores                        15/08/2026
+  portal.propercompressores.com.br
+
+  build PORTAL_V5 · 23/08/2026
+  V5 — BUILD DE PRODUÇÃO (repo GrupoTap/ProperPortal · Cloudflare Pages).
+       UMA única diferença para o V4: saiu a tag <script src="mock.js">.
+       Ela era inofensiva em execução — o consumo do mock é preguiçoso
+       (`const M = () => window.PORTAL_MOCK`) e, com a origem apontada para o
+       Supabase, ele nunca é chamado —, mas SEM o arquivo dá 404 no console de
+       todo cliente, e COM o arquivo publicaria nomes de clientes reais
+       (SORRAG, Aluminas) e as senhas de demonstração. Zero lógica tocada, nenhum id/função/rota
+       renomeado: a mudança é de DEPLOY.
+       ⚠ A `bancada.mjs` continua rodando contra o V4 de
+       `00_EM_ABERTO/NEWFILE_PORTAL_APP/` (ela precisa do mock). Quem confere
+       ESTE arquivo é o `NEWFILE_GATE_PORTAL.mjs` — é essa a divisão de
+       trabalho desde 20/08.
+  build PORTAL_V4 · 22/08/2026 (histórico)
+  V4 — selo do subsistema (decisão 8.1): quando a view mandar e_subsistema/
+       rotulo_item (P8c), o card e o modal da máquina mostram o rótulo
+       "Subsistema em recuperação". Contra a view antiga (sem as colunas) o
+       campo vem undefined e o app fica byte a byte o V3 — velho, não errado.
+  build PORTAL_V3 · 20/08/2026 (histórico)
+
+  ESTADO (rev. 23/08): ligado no schema do P8 e APONTANDO PARA O SUPABASE
+  (`CFG.fonte='supabase'` + anon key preenchida). Publicação: repo
+  `GrupoTap/ProperPortal`, servido pelo Cloudflare Pages a partir dele, com
+  CSP/HSTS no `_headers` (GitHub Pages não serve — sem cabeçalho de resposta,
+  decisão P3). O CNAME `portal` fica na zona da HostGator.
+  A camada de rede está isolada em `Dados` (§4); nada de UI conhece a origem.
+
+  🔧 O QUE MUDOU EM 19/08, e por quê (tudo vem do P8_CONCESSOES.sql):
+  · NÃO EXISTE CADASTRO. O acesso é por convite individual e a senha é criada
+    pelo cliente — decisão do Fernando, 19/08. Por isso nasceram a tela de
+    DEFINIR SENHA e a de recuperação, e por isso o login não tem "criar conta".
+  · O seletor de empresa lê `portal_v_cliente`, não mais `portal_usuario_cliente`
+    (que o P8 desativou). A view NÃO expõe CNPJ de propósito: quem desempata
+    matriz × filial agora é cidade/UF e o nome do grupo.
+  · Filtro de ÁREA (`portal_v_unidade`): só aparece para quem alcança mais de
+    uma unidade. Concessão de grupo/cliente vê tudo; de unidade, só a sua.
+  · O selo "atualizado há X" passou a vir de `rpc/portal_frescor`. Antes lia
+    `sync_meta.atualizado_em` — coluna que NUNCA EXISTIU (é `pushed_at`), e o
+    P8 fecha o `sync_meta` para o cliente. O selo estava quebrado dos dois lados.
+  · Abrir chamado passou a mandar `id_cliente` e `aberto_por`. Sem os dois a
+    política `p_chamado_ins` RECUSA o insert — o botão nunca teria funcionado.
+
+  🔑 DECISÕES QUE ESTE ARQUIVO CARREGA (medidas em 15/08 no sistema vivo):
+  · O discriminador é `id_cliente`, nunca CNPJ — SORRAG Matriz e Filial são
+    dois clientes com o MESMO CNPJ. Por isso o seletor de empresa lista por id.
+  · A etapa do kanban vem PRONTA do banco (`portal_v_os.etapa`), derivada do
+    pipeline sobre duas camadas. O front não interpreta fase interna — se
+    interpretasse, "Nova fase" (que existe em produção) vazaria para o cliente.
+  · Existe a coluna "Aguardando sua aprovação" (decisão do Fernando, 15/08):
+    é a fase em que a bola está COM o cliente, e o mockup não a tinha.
+  · NÃO são exibidos: valor de orçamento, nome de técnico, observação interna,
+    OS de prospecção (INSPECAO_COLETA). Decisões do Fernando, 15/08.
+  · O espelho tem atraso de até 30 min. A tela DIZ isso. Fingir tempo real
+    seria pior que o atraso.
+
+  ⚠ SEM localStorage para dado de negócio. Só a sessão do Supabase e a
+    empresa ativa, ambas re-validadas no servidor a cada requisição — o
+    contexto de empresa NUNCA autoriza nada sozinho.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<!-- ⚠ CSP: as fontes vêm do Google. Para fechar a CSP de verdade, hospede-as
+     junto (são 3 famílias, ~120 KB) e troque este link por um @font-face
+     local. Fica anotado como decisão de deploy, não de código. -->
+<style>
+:root{
+  --char:#353434; --ink:#2B2A2A; --ink-2:#5F5C5A; --ink-3:#8E8A87;
+  --bg:#F4F3F1; --surface:#FFF; --surface-2:#FAF9F7;
+  --line:#E4E1DD; --line-2:#EEEBE7;
+  --or:#F1741F; --or-dk:#F15922; --or-tint:#FDF1E6;
+  --ok:#3B8B60; --ok-t:#E9F3ED; --warn:#C8531C; --warn-t:#FBEAE0;
+  --cool:#4C6E96; --cool-t:#ECF1F7;
+  --sh:0 1px 2px rgba(53,52,52,.05),0 3px 10px rgba(53,52,52,.05);
+  --r:10px; --nav:248px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);
+  font:15px/1.5 'Inter',ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  -webkit-font-smoothing:antialiased}
+h1,h2,h3,.ff{font-family:'Archivo','Inter',ui-sans-serif,system-ui,sans-serif;letter-spacing:-.015em}
+code,.mono{font-family:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--or-dk)}
+:focus-visible{outline:2px solid var(--or-dk);outline-offset:2px;border-radius:4px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ── marca ─────────────────────────────────────────────────────────────── */
+.mk{display:inline-flex;align-items:center;gap:10px}
+.mk .oct{width:30px;height:30px;flex:none;display:grid;place-items:center;color:#fff;
+  font-family:'Archivo',sans-serif;font-weight:700;font-size:15px;
+  background:linear-gradient(135deg,#EFA125,#F15922);
+  clip-path:polygon(30% 0,70% 0,100% 30%,100% 70%,70% 100%,30% 100%,0 70%,0 30%)}
+.mk b{font-family:'Archivo',sans-serif;font-size:15.5px;letter-spacing:-.02em}
+.mk span{display:block;font-size:10.5px;color:var(--ink-3);letter-spacing:.06em;text-transform:uppercase;font-weight:600}
+
+/* ── telas de entrada ──────────────────────────────────────────────────── */
+.gate{min-height:100dvh;display:grid;place-items:center;padding:22px}
+.gcard{width:100%;max-width:404px;background:var(--surface);border:1px solid var(--line);
+  border-radius:14px;box-shadow:var(--sh);padding:28px 26px}
+.gcard h1{font-size:20px;margin:16px 0 4px}
+.gcard .hint{color:var(--ink-2);font-size:13.5px;margin:0 0 20px}
+label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-2);margin:12px 0 5px}
+input[type=email],input[type=password],input[type=text],textarea,select{
+  width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2)}
+input:focus,textarea:focus,select:focus{border-color:var(--or);background:#fff;outline:none}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;
+  padding:11px 16px;border:0;border-radius:8px;cursor:pointer;font-weight:600;font-size:14.5px;
+  background:linear-gradient(135deg,#EFA125,#F15922);color:#fff}
+.btn:hover{filter:brightness(1.04)} .btn:disabled{opacity:.55;cursor:not-allowed;filter:none}
+.btn.gh{background:none;color:var(--ink);border:1px solid var(--line)}
+.btn.sm{width:auto;padding:7px 13px;font-size:13px}
+.lgpd{margin-top:16px;padding-top:14px;border-top:1px solid var(--line-2);
+  font-size:11.5px;color:var(--ink-3);line-height:1.5}
+.erro{background:var(--warn-t);border:1px solid #F0C9B4;color:#8F3A12;
+  border-radius:8px;padding:9px 11px;font-size:13px;margin-top:14px}
+
+/* seletor de empresa */
+.ecard{display:flex;align-items:center;gap:13px;width:100%;text-align:left;cursor:pointer;
+  background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:13px 14px;margin-bottom:9px}
+.ecard:hover{border-color:var(--or);background:#fff}
+.ecard .elg{width:40px;height:40px;flex:none;border-radius:8px;display:grid;place-items:center;
+  background:var(--or-tint);color:var(--or-dk);font-family:'Archivo';font-weight:700;font-size:15px}
+.ecard .enm{font-weight:600;font-size:14.5px;line-height:1.25}
+.ecard .ecnpj{font-size:11.5px;color:var(--ink-3);margin-top:2px}
+
+/* ── app ───────────────────────────────────────────────────────────────── */
+.app{display:none;min-height:100dvh}
+.app.on{display:block}
+.topo{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:12px;
+  background:var(--surface);border-bottom:1px solid var(--line);padding:10px 16px}
+.burger{display:none;background:none;border:1px solid var(--line);border-radius:8px;padding:7px 10px;cursor:pointer}
+.topo .emp{margin-left:auto;display:flex;align-items:center;gap:9px;font-size:13px;color:var(--ink-2)}
+.topo .emp b{color:var(--ink);font-size:13.5px}
+
+.layout{display:grid;grid-template-columns:var(--nav) 1fr;align-items:start}
+nav.side{position:sticky;top:53px;height:calc(100dvh - 53px);background:var(--surface);
+  border-right:1px solid var(--line);padding:14px 10px;display:flex;flex-direction:column;gap:3px}
+nav.side button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+  background:none;border:0;border-radius:9px;padding:10px 12px;cursor:pointer;
+  font-size:14.5px;font-weight:500;color:var(--ink-2)}
+nav.side button:hover{background:var(--surface-2)}
+nav.side button[aria-current=page]{background:var(--or-tint);color:var(--or-dk);font-weight:600}
+nav.side .ic{width:20px;text-align:center;flex:none;font-size:15px}
+nav.side .sep{margin-top:auto;padding-top:12px;border-top:1px solid var(--line-2)}
+main{padding:22px 24px 64px;min-width:0}
+
+.hd{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+.hd h1{font-size:23px;margin:0}
+.frescor{margin-left:auto;font-size:11.5px;color:var(--ink-3);display:flex;align-items:center;gap:6px}
+.frescor .pt{width:7px;height:7px;border-radius:50%;background:var(--ok)}
+.frescor.velho .pt{background:var(--warn)}
+.sub{color:var(--ink-2);font-size:13.5px;margin:0 0 18px}
+
+/* cartões / grades */
+.grade{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(268px,1fr))}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+  box-shadow:var(--sh);padding:14px 15px}
+.card.clk{cursor:pointer} .card.clk:hover{border-color:var(--or)}
+.card h3{font-size:15px;margin:0 0 3px}
+.card .meta{font-size:12px;color:var(--ink-3)}
+.kv{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;
+  padding:5px 0;border-top:1px solid var(--line-2)}
+.kv:first-of-type{border-top:0}
+.kv b{font-weight:600}
+.kv .k{color:var(--ink-3)}
+
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;
+  padding:3px 9px;border-radius:20px;border:1px solid}
+.c-ok{background:var(--ok-t);border-color:#BFDDCC;color:#26694A}
+.c-warn{background:var(--warn-t);border-color:#F0C9B4;color:#8F3A12}
+.c-cool{background:var(--cool-t);border-color:#C7D6E7;color:#345party}
+.c-cool{color:#34537A}
+.c-mut{background:var(--surface-2);border-color:var(--line);color:var(--ink-2)}
+.c-or{background:var(--or-tint);border-color:#F6CFA9;color:#A8480F}
+.c-sub{background:#EEF2FF;border-color:#C7D2FE;color:#3730A3} /* V4 — selo de subsistema (8.1) */
+
+/* kanban */
+/* Sete colunas não cabem ao lado do menu num notebook, e espremer mais
+   tornaria o cartão ilegível. Então o quadro rola — e AVISA que rola, com
+   um degradê na borda. Quadro que rola sem dizer é quadro que parece
+   truncado. */
+.kb-wrap{overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch;
+  position:relative;scroll-snap-type:x proximity;
+  -webkit-mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 34px),transparent 100%);
+  mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 34px),transparent 100%)}
+.kb-wrap.fim{-webkit-mask-image:none;mask-image:none}
+.kb-col{scroll-snap-align:start}
+/* 7 colunas no fluxo interno. 186px é o menor tamanho em que o número da OS
+   e o nome da máquina ainda cabem sem quebrar feio — assim o quadro inteiro
+   entra num notebook e o scroll horizontal vira exceção, não regra. */
+.kb{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(186px,1fr);gap:9px;min-width:min-content}
+.kb-col{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r);padding:10px}
+    .kb-col > h4{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-2);
+  margin:0 0 9px;display:flex;align-items:center;gap:7px}
+.kb-col .n{background:var(--surface);border:1px solid var(--line);border-radius:20px;
+  padding:0 7px;font-size:10.5px;font-weight:700;color:var(--ink-3)}
+.kb-col.foco{border-color:var(--or);background:var(--or-tint)}
+.kb-col.foco > h4{color:var(--or-dk)}
+.kb-card{background:var(--surface);border:1px solid var(--line);border-radius:8px;
+  padding:10px 11px;margin-bottom:8px;cursor:pointer}
+.kb-card:hover{border-color:var(--or)}
+.kb-card .os{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-3)}
+.kb-card .mq{font-weight:600;font-size:13px;margin:2px 0 5px;line-height:1.3;overflow-wrap:anywhere}
+.secao{margin:22px 0 10px;display:flex;align-items:center;gap:9px}
+.secao h2{font-size:14px;margin:0}
+.secao .tag{font-size:11px;color:var(--ink-3)}
+
+/* filtros */
+.filtros{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}
+.filtros button{background:var(--surface);border:1px solid var(--line);border-radius:20px;
+  padding:6px 13px;font-size:13px;cursor:pointer;color:var(--ink-2)}
+.filtros button[aria-pressed=true]{background:var(--char);border-color:var(--char);color:#fff;font-weight:600}
+
+/* estados */
+.vazio,.carregando{background:var(--surface);border:1px dashed var(--line);border-radius:var(--r);
+  padding:34px 22px;text-align:center;color:var(--ink-3);font-size:13.5px}
+.skel{background:linear-gradient(90deg,var(--line-2),var(--surface-2),var(--line-2));
+  background-size:200% 100%;animation:sk 1.2s linear infinite;border-radius:8px;height:88px}
+@keyframes sk{to{background-position:-200% 0}}
+@media (prefers-reduced-motion:reduce){.skel{animation:none}}
+
+/* modal */
+.modal{position:fixed;inset:0;background:rgba(43,42,42,.42);display:none;place-items:center;
+  padding:18px;z-index:60}
+.modal.on{display:grid}
+.modal .bx{background:var(--surface);border-radius:14px;width:100%;max-width:560px;
+  max-height:88dvh;overflow:auto;padding:22px 22px 20px;box-shadow:0 12px 40px rgba(0,0,0,.16)}
+.modal h2{font-size:18px;margin:0 0 3px}
+.fecha{float:right;background:none;border:0;font-size:22px;line-height:1;cursor:pointer;color:var(--ink-3)}
+
+.doc{display:flex;align-items:center;gap:11px;padding:10px 0;border-top:1px solid var(--line-2)}
+.doc:first-of-type{border-top:0}
+.doc .ic{width:32px;height:32px;flex:none;border-radius:7px;background:var(--or-tint);
+  color:var(--or-dk);display:grid;place-items:center;font-size:13px;font-weight:700}
+.doc .nm{font-size:13.5px;font-weight:500;line-height:1.3}
+.doc .dt{font-size:11.5px;color:var(--ink-3)}
+
+.aviso{background:var(--cool-t);border:1px solid #C7D6E7;color:#34537A;border-radius:8px;
+  padding:10px 12px;font-size:12.5px;margin-bottom:14px;line-height:1.5}
+.selo{position:fixed;left:10px;bottom:10px;z-index:70;background:var(--char);color:#fff;
+  font-size:10.5px;letter-spacing:.05em;padding:5px 10px;border-radius:20px;opacity:.88}
+
+@media (max-width:880px){
+  .layout{grid-template-columns:1fr}
+  nav.side{position:fixed;inset:53px auto 0 0;width:250px;z-index:40;transform:translateX(-100%);
+    transition:transform .18s;box-shadow:0 0 40px rgba(0,0,0,.12)}
+  nav.side.on{transform:none}
+  .burger{display:block}
+  main{padding:18px 15px 60px}
+  .topo .emp b{max-width:38vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:-4px}
+}
+@media (prefers-reduced-motion:reduce){nav.side{transition:none}}
+/* ── 🔧 19/08 · bloco F ────────────────────────────────────────────────── */
+.gcard a{color:var(--ink);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.reg{list-style:none;padding:0;margin:10px 0 2px;font-size:12.5px;color:var(--ink-3)}
+.reg li{display:flex;gap:8px;align-items:center;padding:2.5px 0}
+.reg li .mk{width:13px;display:inline-block;text-align:center;font-weight:700}
+.reg li.ok{color:#2f7d4f}
+.okmsg{font-size:13px;background:#EDF6F0;border:1px solid #CBE4D6;color:#245C3C;
+       padding:10px 12px;border-radius:8px;margin-top:12px}
+#fArea{align-items:center;gap:9px}
+#fArea label{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3)}
+#fArea select{margin:0;max-width:320px}
+</style>
+</head>
+<body>
+
+<!-- ══ 1 · LOGIN ═══════════════════════════════════════════════════════ -->
+<section class="gate" id="telaLogin">
+  <div class="gcard">
+    <div class="mk"><span class="oct">P</span><span><b>Portal do Cliente</b><span>Proper Compressores</span></span></div>
+    <h1>Entrar</h1>
+    <p class="hint">Acompanhe suas máquinas, o andamento das ordens de serviço e baixe os laudos.</p>
+    <form id="fmLogin" novalidate>
+      <label for="inEmail">E-mail</label>
+      <input id="inEmail" type="email" autocomplete="username" required placeholder="voce@suaempresa.com.br">
+      <label for="inSenha">Senha</label>
+      <input id="inSenha" type="password" autocomplete="current-password" required>
+      <div style="height:16px"></div>
+      <button class="btn" type="submit" id="btLogin">Entrar</button>
+      <div id="erroLogin" class="erro" hidden></div>
+      <p class="hint" style="text-align:center;margin:13px 0 0">
+        <a id="lkEsqueci">Esqueci minha senha</a></p>
+    </form>
+    <p class="lgpd">O acesso é individual e registrado. Você vê apenas as máquinas e ordens de
+    serviço da sua empresa. Não temos acesso à sua senha.<br>
+    Não consegue entrar? Fale com a Proper — <b>não existe autocadastro</b>: o acesso é
+    criado por nós e enviado por convite.</p>
+  </div>
+</section>
+
+<!-- ══ 2 · SELETOR DE EMPRESA ══════════════════════════════════════════ -->
+<!-- Só aparece para quem tem mais de um cliente vinculado. É o caso real
+     medido: SORRAG Matriz e Filial, dois clientes com o MESMO CNPJ. -->
+<section class="gate" id="telaEmpresa" hidden>
+  <div class="gcard">
+    <div class="mk"><span class="oct">P</span><span><b>Portal do Cliente</b><span>Proper Compressores</span></span></div>
+    <h1>Escolha a empresa</h1>
+    <p class="hint">Seu acesso cobre mais de uma empresa. Você pode trocar depois, sem sair.</p>
+    <div id="listaEmpresas"></div>
+  </div>
+</section>
+
+<!-- ══ 2B · DEFINIR SENHA ═════════════════════════════════════════════ -->
+<!-- 🔑 Esta tela é a consequência direta da decisão de 19/08: o convite é
+     individual e a senha é criada pelo CLIENTE. Ela atende os dois links que
+     o Supabase manda — convite (`invite`) e recuperação (`recovery`). -->
+<section class="gate" id="telaSenha" hidden>
+  <div class="gcard">
+    <div class="mk"><span class="oct">P</span><span><b>Portal do Cliente</b><span>Proper Compressores</span></span></div>
+    <h1 id="ttSenha">Crie sua senha</h1>
+    <p class="hint" id="hintSenha">Este acesso é seu e individual. A Proper não vê a sua senha.</p>
+    <form id="fmSenha" novalidate>
+      <label for="inNova">Nova senha</label>
+      <input id="inNova" type="password" autocomplete="new-password" required>
+      <ul class="reg" id="regras"></ul>
+      <label for="inNova2" style="margin-top:12px">Repita a senha</label>
+      <input id="inNova2" type="password" autocomplete="new-password" required>
+      <div style="height:16px"></div>
+      <button class="btn" type="submit" id="btSenha">Salvar e entrar</button>
+      <div id="erroSenha" class="erro" hidden></div>
+    </form>
+    <p class="lgpd">O link do convite vale por tempo limitado e só pode ser usado uma vez.
+    Se ele expirar, peça um novo à Proper.</p>
+  </div>
+</section>
+
+<!-- ══ 2C · RECUPERAR SENHA ═══════════════════════════════════════════ -->
+<section class="gate" id="telaRecuperar" hidden>
+  <div class="gcard">
+    <div class="mk"><span class="oct">P</span><span><b>Portal do Cliente</b><span>Proper Compressores</span></span></div>
+    <h1>Recuperar acesso</h1>
+    <p class="hint">Informe o e-mail do seu acesso. Se ele existir, enviamos um link para você
+    definir uma senha nova.</p>
+    <form id="fmRec" novalidate>
+      <label for="inRecEmail">E-mail</label>
+      <input id="inRecEmail" type="email" autocomplete="username" required>
+      <div style="height:16px"></div>
+      <button class="btn" type="submit" id="btRec">Enviar link</button>
+      <div id="erroRec" class="erro" hidden></div>
+      <div id="okRec" class="okmsg" hidden></div>
+      <p class="hint" style="text-align:center;margin:13px 0 0"><a id="lkVoltar">Voltar para o login</a></p>
+    </form>
+    <!-- ⚠ A resposta é a MESMA exista ou não o e-mail. Dizer "este e-mail não
+         está cadastrado" entregaria a lista de clientes da Proper a quem
+         ficasse testando endereços. -->
+  </div>
+</section>
+
+<!-- ══ 3 · APLICAÇÃO ══════════════════════════════════════════════════ -->
+<div class="app" id="app">
+  <header class="topo">
+    <button class="burger" id="btMenu" aria-label="Abrir menu" aria-expanded="false">☰</button>
+    <div class="mk"><span class="oct">P</span><span><b>Portal do Cliente</b><span>Proper Compressores</span></span></div>
+    <div class="emp"><span id="empNome"><b>—</b></span></div>
+  </header>
+
+  <div class="layout">
+    <nav class="side" id="nav" aria-label="Navegação principal">
+      <button data-v="maquinas"  aria-current="page"><span class="ic">▦</span>Minhas máquinas</button>
+      <button data-v="andamento"><span class="ic">◫</span>Andamento</button>
+      <button data-v="relatorios"><span class="ic">▤</span>Relatórios</button>
+      <button data-v="chamados"><span class="ic">◈</span>Chamados</button>
+      <div class="sep">
+        <button id="btTrocar" hidden><span class="ic">⇄</span>Trocar de empresa</button>
+        <button id="btSair"><span class="ic">⏻</span>Sair</button>
+      </div>
+    </nav>
+    <main id="main"><div class="carregando">Carregando…</div></main>
+  </div>
+</div>
+
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="mdTit">
+  <div class="bx"><button class="fecha" id="btFecha" aria-label="Fechar">×</button>
+    <h2 id="mdTit"></h2><div id="mdCorpo"></div></div>
+</div>
+
+<div class="selo" id="selo" hidden></div>
+
+<script>
+'use strict';
+/* ═══════════════════════════════════════════════════════════════════════════
+   §1 · CONFIGURAÇÃO — o único lugar que muda para sair do mock
+   ═══════════════════════════════════════════════════════════════════════════ */
+const CFG = {
+  /* 🔧 20/08 — LIGADO NO SUPABASE. O selo de DEMONSTRAÇÃO some sozinho
+     (o boot só o mostra quando fonte==='mock'). Para voltar ao mock e
+     depurar tela sem tocar no banco: trocar de volta para 'mock'. */
+  fonte: 'supabase',                   // 'mock' | 'supabase'
+  supabase: {
+    /* projeto `propercare`, sa-east-1. A anon key é PÚBLICA por design — ela
+       não autoriza nada sozinha: quem autoriza é a RLS somada ao JWT do
+       usuário. É por isso que o P8 revoga `anon` de tudo que é do portal. */
+    url:     'https://mxczeemglrehadjualvi.supabase.co',
+    /* 🔧 20/08 — a MESMA chave que o PCM V126 já usa (`SUPA_ANON`,
+       index.html L11851). role=anon, ref=mxczeemglrehadjualvi. Não foi
+       inventada nem digitada: foi copiada do front que já está no ar. */
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im14Y3plZW1nbHJlaGFkanVhbHZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0Mjg4NzUsImV4cCI6MjEwMDAwNDg3NX0.TPToXpuPS6PvNzADaFqc7r7P9TIsS4DtGwm-n-0IXDw'
+  },
+  atrasoEspelhoMin: 30,                // o push do GAS roda de 30 em 30 min
+  /* Para onde o Supabase manda o cliente depois do convite. TEM de estar na
+     lista de Redirect URLs do dashboard, senão o link volta para o Site URL e
+     a tela de senha nunca aparece. */
+  redirectSenha: (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+    ? location.origin + '/'                       /* ensaio local (item 3 do piloto) */
+    : 'https://portal.propercompressores.com.br/',
+  /* ⚠ ESPELHO das regras configuradas no Supabase Auth (spec do bloco A, §2.3).
+     Isto aqui é UX — quem recusa de verdade é o servidor. Mudou no dashboard,
+     mude aqui: senão a tela promete uma coisa e o servidor faz outra. */
+  /* 🔧 19/08 — CONFERIDO CONTRA O DASHBOARD, não suposto. O painel Email do
+     projeto está em "Lowercase, uppercase letters, digits and symbols
+     (recommended)", que é MAIS forte do que este arquivo pedia. Divergência
+     aqui não é detalhe: a tela diria "senha ok" e o servidor recusaria, e o
+     cliente ficaria preso na tela de criar senha sem entender por quê.
+     ⚠ Se um dia o dropdown do dashboard mudar, esta linha muda JUNTO. */
+  senha: { min:10, minuscula:true, maiuscula:true, digito:true, simbolo:true },
+  /* 🔴 BLOCO B ADIADO (decisão de 19/08): a Edge Function que serve o byte do
+     Drive não existe. Enquanto for `false`, o portal DIZ isso — em vez de
+     oferecer um botão que falharia sem explicação.
+     Quando o bloco B entrar: virar `true`. É a única mudança necessária. */
+  downloadLaudo: false
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   §2 · AS COLUNAS DO KANBAN
+
+   ⚠ A ordem vem do BANCO (`portal_v_os.etapa_ordem`). O front não decide
+   etapa e não lê fase interna — se lesse, "Nova fase" (que existe em
+   produção hoje) apareceria para o cliente.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const COLUNAS_INTERNO = [
+  { ordem:10, rotulo:'Recebido' },
+  { ordem:20, rotulo:'Em peritagem' },
+  { ordem:30, rotulo:'Aguardando sua aprovação', foco:true },   // a bola está com o cliente
+  { ordem:35, rotulo:'Em análise pela Proper' },                // pipeline resolvido, decisão nossa
+  { ordem:40, rotulo:'Em execução' },
+  { ordem:50, rotulo:'Em testes' },
+  { ordem:60, rotulo:'Pronto para retirada' }
+];
+const COLUNAS_EXTERNO = [
+  { ordem:10, rotulo:'Agendada' },
+  { ordem:20, rotulo:'Em andamento' },
+  { ordem:90, rotulo:'Concluída' }
+];
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   §3 · UTILIDADES
+   ═══════════════════════════════════════════════════════════════════════════ */
+const $  = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+function esc(s){ return String(s == null ? '' : s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function dt(v){
+  if (!v) return '—';
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v));
+  if (m) return m[3] + '/' + m[2] + '/' + m[1];
+  const d = new Date(v); return isNaN(d) ? String(v) : d.toLocaleDateString('pt-BR');
+}
+function cnpjFmt(c){
+  const d = String(c || '').replace(/\D/g,'');
+  return d.length === 14
+    ? d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5')
+    : (d || '');
+}
+function iniciais(n){
+  return String(n || '?').replace(/[^\wÀ-ÿ ]/g,' ').trim().split(/\s+/)
+    .slice(0,2).map(p => p[0]).join('').toUpperCase() || '?';
+}
+function haQuanto(iso){
+  if (!iso) return null;
+  const min = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (min < 1)  return 'agora';
+  if (min < 60) return 'há ' + min + ' min';
+  const h = Math.round(min/60);
+  return h < 24 ? ('há ' + h + ' h') : ('há ' + Math.round(h/24) + ' d');
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   §4 · CAMADA DE DADOS — a única que conhece a origem
+
+   Trocar `CFG.fonte` para 'supabase' é tudo. Nenhuma função de tela abaixo
+   sabe se o dado veio de mock ou de PostgREST.
+   ⚠ Toda leitura já vem filtrada pela RLS: o front NÃO filtra por cliente.
+     Filtrar no front seria a fábrica do próximo vazamento.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const Dados = (() => {
+  let sessao = null;    // { token, userId, email }
+  let empresa = null;   // { id_cliente, nome, cnpj }
+
+  /* ── implementação Supabase (PostgREST) ─────────────────────────────── */
+  async function sbFetch(caminho, opts){
+    opts = opts || {};
+    const r = await fetch(CFG.supabase.url + '/rest/v1/' + caminho, {
+      method: opts.metodo || 'GET',
+      headers: Object.assign({
+        apikey: CFG.supabase.anonKey,
+        Authorization: 'Bearer ' + (sessao ? sessao.token : CFG.supabase.anonKey),
+        'Content-Type': 'application/json',
+        'Accept-Profile': 'public'
+      }, opts.headers || {}),
+      body: opts.corpo ? JSON.stringify(opts.corpo) : undefined,
+      signal: AbortSignal.timeout ? AbortSignal.timeout(25000) : undefined
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status + ' — ' + (await r.text()).slice(0,160));
+    return r.status === 204 ? null : r.json();
+  }
+
+  /* ── autenticação ────────────────────────────────────────────────────
+     🔑 NÃO EXISTE `signUp` neste arquivo, e é de propósito: o cadastro
+     público está DESLIGADO no Supabase (decisão de 19/08). Quem cria conta é
+     a Proper, por convite individual. */
+  async function sbAuth(caminho, corpo, metodo, token){
+    const r = await fetch(CFG.supabase.url + '/auth/v1/' + caminho, {
+      method: metodo || 'POST',
+      headers: Object.assign(
+        { apikey: CFG.supabase.anonKey, 'Content-Type':'application/json' },
+        token ? { Authorization:'Bearer ' + token } : {}),
+      body: corpo ? JSON.stringify(corpo) : undefined
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.msg || j.error_description || j.message || ('HTTP ' + r.status));
+    return j;
+  }
+
+  const sb = {
+    async login(email, senha){
+      const r = await fetch(CFG.supabase.url + '/auth/v1/token?grant_type=password', {
+        method:'POST',
+        headers:{ apikey: CFG.supabase.anonKey, 'Content-Type':'application/json' },
+        body: JSON.stringify({ email, password: senha })
+      });
+      if (!r.ok) throw new Error('credenciais');
+      const j = await r.json();
+      sessao = { token: j.access_token, userId: j.user && j.user.id, email };
+      return sessao;
+    },
+    /* 🔧 P8: `portal_usuario_cliente` foi desativada. Quem responde "quais
+       empresas eu alcanço" agora é a view, que já resolve os TRÊS escopos —
+       o front não sabe (nem precisa saber) se o acesso veio de grupo, de
+       cliente ou de unidade. */
+    empresas: () => sbFetch('portal_v_cliente?select=id_cliente,nome,cidade,uf,grupo_id,grupo_nome&order=nome'),
+    unidades: () => sbFetch('portal_v_unidade?select=*&order=nome'),
+    maquinas: () => sbFetch('portal_v_maquina?select=*&order=marca'),
+    os:       () => sbFetch('portal_v_os?select=*&order=data_abertura.desc'),
+    osMaquina:() => sbFetch('portal_v_os_maquina?select=*'),
+    documentos:() => sbFetch('portal_v_documento?select=*&order=emitido_em.desc'),
+    chamados: () => sbFetch('portal_chamado?select=*&order=criado_em.desc'),
+    /* ⚠ `id_cliente` e `aberto_por` são OBRIGATÓRIOS: a política `p_chamado_ins`
+       exige que o cliente esteja entre os seus e que o autor seja você mesmo.
+       Sem os dois, o insert é recusado pela RLS — o botão nunca funcionaria. */
+    abrirChamado: (c) => sbFetch('portal_chamado', {
+      metodo:'POST',
+      headers:{ Prefer:'return=representation' },
+      corpo: Object.assign({}, c, {
+        id_cliente: empresa && empresa.id_cliente,
+        aberto_por: sessao && sessao.userId
+      })
+    }),
+    /* 🔧 P8b: o `sync_meta` é do token-ponte, não do cliente. O instante vem
+       por função, sem expor a tabela nem a contagem de linhas. */
+    frescor:  () => sbFetch('rpc/portal_frescor', { metodo:'POST', corpo:{} }),
+
+    /* O link do convite chega de duas formas conforme a versão do GoTrue e a
+       edição do template. O portal aceita as DUAS, para não depender de qual
+       delas o dashboard resolveu mandar naquele dia. */
+    async trocarLink(p){
+      if (p.access_token) return p.access_token;
+      const j = await sbAuth('verify', { type:p.type, token_hash:p.token_hash });
+      return j.access_token;
+    },
+    async definirSenha(token, senha){
+      const j = await sbAuth('user', { password: senha }, 'PUT', token);
+      return { token: token, userId: j.id, email: j.email };
+    },
+    recuperar: (email) => sbAuth('recover?redirect_to=' +
+      encodeURIComponent(CFG.redirectSenha), { email })
+  };
+
+  /* ── implementação MOCK ──────────────────────────────────────────────
+     A forma dos objetos é a MEDIDA em 15/08, não inventada:
+     mesmos campos das views, mesmos tipos de OS, mesmas etapas derivadas,
+     e o par de mesmo CNPJ que existe em produção.                        */
+  const M = () => window.PORTAL_MOCK;   // preguiçoso: não depende da ordem das tags
+  const espera = (v, ms) => new Promise(r => setTimeout(() => r(JSON.parse(JSON.stringify(v))), ms || 220));
+  function daEmpresa(lista){ return lista.filter(x => x.id_cliente === (empresa && empresa.id_cliente)); }
+  /* 🔑 O mock resolve o escopo com a MESMA regra do banco (ver `clientesDe` /
+     `clientesAmplosDe` no mock.js). Se resolvesse diferente do SQL, a bancada
+     daria verde e a produção viria vazia. */
+  function amplo(){ return M().clientesAmplosDe(sessao.userId).indexOf(empresa && empresa.id_cliente) >= 0; }
+  function minhasUnid(){ return M().unidadesDe(sessao.userId); }
+  /* Espelha o `portal_ve_maquina()`: cliente amplo OU máquina na minha área. */
+  function maquinasVisiveis(){
+    return M().maquinas.filter(m => m.id_cliente === (empresa && empresa.id_cliente))
+      .filter(m => amplo() || minhasUnid().indexOf(m.unidade_id) >= 0);
+  }
+  /* Espelha o `portal_ve_os()`: o eixo novo. */
+  function osVisiveis(){
+    const ids = maquinasVisiveis().map(m => m.maquina_id);
+    return daEmpresa(M().os)
+      .filter(o => o.tipo_os !== 'INSPECAO_COLETA')
+      .filter(o => amplo() || M().os_maquina.some(v => v.id_os === o.id_os && ids.indexOf(v.maquina_id) >= 0));
+  }
+
+  const mk = {
+    async login(email, senha){
+      await espera(null, 420);
+      const u = M().usuarios.find(u => u.email.toLowerCase() === String(email).trim().toLowerCase());
+      if (!u || senha !== u.senha) throw new Error('credenciais');
+      sessao = { token:'mock', userId:u.id, email:u.email };
+      return sessao;
+    },
+    empresas: () => espera(M().clientesDe(sessao.userId).map(id => {
+      const c = M().clientes.find(x => x.id === id) || {};
+      return { id_cliente:id, nome:c.nome, cidade:c.cidade, uf:c.uf,
+               grupo_id:c.grupo_id, grupo_nome:c.grupo_nome };
+    })),
+    unidades:  () => espera(M().unidades.filter(u =>
+      u.id_cliente === (empresa && empresa.id_cliente) &&
+      (amplo() || minhasUnid().indexOf(u.unidade_id) >= 0))),
+    maquinas:  () => espera(maquinasVisiveis()),
+    os:        () => espera(osVisiveis()),
+    osMaquina: () => {
+      const ok = osVisiveis().map(o => o.id_os);
+      return espera(daEmpresa(M().os_maquina).filter(v => ok.indexOf(v.id_os) >= 0));
+    },
+    /* ⚠ o mock TEM de espelhar o filtro da view: a `portal_v_documento`
+       exclui anexo de OS de prospecção. Sem isto aqui, o mock ficaria mais
+       permissivo que o banco e a bancada daria falso verde. */
+    documentos:() => {
+      const ok = osVisiveis().map(o => o.id_os);
+      return espera(daEmpresa(M().documentos).filter(d => ok.indexOf(d.id_os) >= 0));
+    },
+    chamados:  () => espera(daEmpresa(M().chamados)),
+    async abrirChamado(c){
+      await espera(null, 380);
+      const novo = Object.assign({ id:'CH-' + Date.now(), status:'fila',
+        criado_em:new Date().toISOString(), id_cliente: empresa.id_cliente }, c);
+      M().chamados.unshift(novo);
+      return [novo];
+    },
+    frescor: () => espera(new Date(Date.now() - 11*60000).toISOString()),
+    trocarLink: () => espera('token-de-mentira', 300),
+    definirSenha: () => {
+      const u = M().usuarios[0];
+      return espera({ token:'mock', userId:u.id, email:u.email }, 500);
+    },
+    recuperar: () => espera(true, 500)
+  };
+
+  const impl = () => (CFG.fonte === 'supabase' ? sb : mk);
+
+  return {
+    get sessao(){ return sessao; },
+    /* Entrar direto com o token do convite, sem pedir a senha que a pessoa
+       acabou de criar. */
+    usarToken(t){ sessao = { token:t.token, userId:t.userId, email:t.email }; return sessao; },
+    get empresa(){ return empresa; },
+    setEmpresa(e){ empresa = e; },
+    sair(){ sessao = null; empresa = null; },
+    login: (e,s) => impl().login(e,s),
+    trocarLink: (p) => impl().trocarLink(p),
+    definirSenha: (t,se) => impl().definirSenha(t,se),
+    recuperar: (e) => impl().recuperar(e),
+    empresas: () => impl().empresas(),
+    unidades: () => impl().unidades(),
+    maquinas: () => impl().maquinas(),
+    os: () => impl().os(),
+    osMaquina: () => impl().osMaquina(),
+    documentos: () => impl().documentos(),
+    chamados: () => impl().chamados(),
+    abrirChamado: (c) => impl().abrirChamado(c),
+    frescor: () => impl().frescor(),
+    /* O byte do PDF NUNCA vem de URL do Drive. Sai por Edge Function que
+       valida o JWT e confere o dono do documento. No mock, avisa. */
+    urlDocumento(id){
+      return CFG.fonte === 'supabase'
+        ? (CFG.supabase.url + '/functions/v1/anexo/' + encodeURIComponent(id))
+        : null;
+    }
+  };
+})();
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   §5 · TELAS
+   ═══════════════════════════════════════════════════════════════════════════ */
+let VISTA = 'maquinas';
+let CACHE = {};
+/* '' = todas as áreas. Só existe para quem ALCANÇA mais de uma unidade; quem
+   tem concessão de uma área só não vê filtro nenhum — não há o que filtrar. */
+let AREA  = '';
+
+const TELAS = { login:'#telaLogin', empresa:'#telaEmpresa',
+                senha:'#telaSenha', recuperar:'#telaRecuperar' };
+function mostrar(qual){
+  Object.keys(TELAS).forEach(k => {
+    const el = $(TELAS[k]);
+    el.hidden = (k !== qual);
+    el.style.display = (k === qual) ? '' : 'none';
+  });
+  $('#app').classList.toggle('on', qual === 'app');
+}
+
+/* ── login ─────────────────────────────────────────────────────────────── */
+$('#fmLogin').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const bt = $('#btLogin'), err = $('#erroLogin');
+  err.hidden = true; bt.disabled = true; bt.textContent = 'Entrando…';
+  try{
+    await Dados.login($('#inEmail').value, $('#inSenha').value);
+    const vin = await Dados.empresas();
+    if (!vin.length) throw new Error('sem-vinculo');
+    if (vin.length === 1){ escolherEmpresa(vin[0]); }
+    else { desenharEmpresas(vin); mostrar('empresa'); }
+  }catch(e){
+    err.hidden = false;
+    err.textContent = e.message === 'sem-vinculo'
+      ? 'Seu usuário ainda não está vinculado a nenhuma empresa. Fale com a Proper.'
+      : (String(e.message).includes('credenciais')
+          ? 'E-mail ou senha não conferem.'
+          : 'Não consegui conectar agora. Tente de novo em instantes.');
+  }finally{ bt.disabled = false; bt.textContent = 'Entrar'; }
+});
+
+/* ── senha: convite e recuperação ───────────────────────────────────────
+   🔑 Estas duas telas existem porque o acesso é por CONVITE INDIVIDUAL e a
+   senha é criada pelo cliente (decisão de 19/08). Não há autocadastro. */
+let LINK = null;   // { token, tipo }
+
+/* O Supabase manda o link de duas formas conforme a versão do GoTrue e a
+   edição do template:
+     · moderna → ?token_hash=…&type=invite   (precisa passar pelo /verify)
+     · antiga  → #access_token=…&type=invite (a sessão já vem pronta)
+   Aceitar as duas custa 6 linhas e evita descobrir a diferença com o cliente
+   olhando uma tela em branco. */
+function paramsDoLink(){
+  const h = new URLSearchParams(String(location.hash || '').replace(/^#/, ''));
+  const q = new URLSearchParams(location.search || '');
+  const pega = (k) => h.get(k) || q.get(k);
+  const tipo = pega('type');
+  const erro = pega('error_description') || pega('error');
+  if (erro) return { erro: erro.replace(/\+/g,' ') };
+  if (!tipo || ['invite','recovery','signup'].indexOf(tipo) < 0) return null;
+  const at = pega('access_token'), th = pega('token_hash') || pega('token');
+  if (!at && !th) return null;
+  return { type: tipo, access_token: at, token_hash: th };
+}
+/* ⚠ O token sai da barra de endereços assim que é lido: link de convite em
+   histórico de navegador compartilhado é acesso de graça para o próximo. */
+function limparURL(){
+  try{ history.replaceState(null, '', location.pathname); }catch(e){}
+}
+
+function regrasDaSenha(v){
+  const R = CFG.senha, s = String(v || '');
+  return [
+    { ok: s.length >= R.min,        txt: 'pelo menos ' + R.min + ' caracteres' },
+    R.minuscula && { ok: /[a-z]/.test(s),        txt: 'uma letra minúscula' },
+    R.maiuscula && { ok: /[A-Z]/.test(s),        txt: 'uma letra maiúscula' },
+    R.digito    && { ok: /[0-9]/.test(s),        txt: 'um número' },
+    R.simbolo   && { ok: /[^A-Za-z0-9]/.test(s), txt: 'um símbolo' }
+  ].filter(Boolean);
+}
+function pintarRegras(){
+  const rs = regrasDaSenha($('#inNova').value);
+  $('#regras').innerHTML = rs.map(r =>
+    '<li class="' + (r.ok ? 'ok' : '') + '"><span class="mk">' + (r.ok ? '✓' : '·') +
+    '</span>' + esc(r.txt) + '</li>').join('');
+  return rs.every(r => r.ok);
+}
+$('#inNova').addEventListener('input', pintarRegras);
+
+async function abrirTelaSenha(p){
+  mostrar('senha');
+  pintarRegras();
+  const recup = p.type === 'recovery';
+  $('#ttSenha').textContent   = recup ? 'Defina uma nova senha' : 'Crie sua senha';
+  $('#hintSenha').textContent = recup
+    ? 'Escolha uma senha nova para o seu acesso.'
+    : 'Este acesso é seu e individual. A Proper não vê a sua senha.';
+  $('#btSenha').disabled = true;
+  try{
+    LINK = { token: await Dados.trocarLink(p), tipo: p.type };
+    $('#btSenha').disabled = false;
+  }catch(e){
+    linkInvalido();
+  }finally{ limparURL(); }
+}
+function linkInvalido(){
+  mostrar('senha');
+  $('#fmSenha').hidden = true;
+  $('#ttSenha').textContent = 'Este link não vale mais';
+  $('#hintSenha').innerHTML = 'Links de convite e de recuperação expiram e só podem ser usados ' +
+    'uma vez. Peça um novo à Proper, ou <a id="lkVoltar2">volte para o login</a>.';
+  const v = $('#lkVoltar2');
+  if (v) v.addEventListener('click', () => { $('#fmSenha').hidden = false; mostrar('login'); });
+}
+
+$('#fmSenha').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const err = $('#erroSenha'), bt = $('#btSenha');
+  err.hidden = true;
+  if (!pintarRegras()){
+    err.hidden = false; err.textContent = 'A senha ainda não atende aos requisitos acima.'; return;
+  }
+  if ($('#inNova').value !== $('#inNova2').value){
+    err.hidden = false; err.textContent = 'As duas senhas não são iguais.'; return;
+  }
+  bt.disabled = true; bt.textContent = 'Salvando…';
+  try{
+    const ses = await Dados.definirSenha(LINK.token, $('#inNova').value);
+    Dados.usarToken(ses);
+    const vin = await Dados.empresas();
+    if (!vin.length) throw new Error('sem-vinculo');
+    if (vin.length === 1) escolherEmpresa(vin[0]);
+    else { desenharEmpresas(vin); mostrar('empresa'); }
+  }catch(e){
+    err.hidden = false;
+    /* ⚠ "senha fraca" aqui vem do SERVIDOR, não da checagem de cima: as regras
+       do dashboard e as do CFG.senha podem estar fora de sincronia, e quem
+       manda é o servidor. Por isso a mensagem dele é repassada. */
+    err.textContent = e.message === 'sem-vinculo'
+      ? 'Sua senha foi criada, mas o seu acesso ainda não foi liberado para nenhuma empresa. Fale com a Proper.'
+      : ('Não consegui salvar: ' + e.message);
+  }finally{ bt.disabled = false; bt.textContent = 'Salvar e entrar'; }
+});
+
+/* ── recuperação ─────────────────────────────────────────────────────── */
+$('#lkEsqueci').addEventListener('click', (e) => {
+  e.preventDefault();
+  $('#inRecEmail').value = $('#inEmail').value;
+  $('#okRec').hidden = true; $('#erroRec').hidden = true;
+  mostrar('recuperar');
+});
+$('#lkVoltar').addEventListener('click', (e) => { e.preventDefault(); mostrar('login'); });
+$('#fmRec').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const bt = $('#btRec'), err = $('#erroRec'), ok = $('#okRec');
+  err.hidden = true; ok.hidden = true;
+  bt.disabled = true; bt.textContent = 'Enviando…';
+  try{
+    await Dados.recuperar($('#inRecEmail').value.trim());
+  }catch(e){
+    /* ⚠ Silencioso de propósito: erro do servidor aqui costuma ser "e-mail não
+       existe", e mostrar isso entregaria a lista de clientes da Proper a quem
+       ficasse testando endereços. */
+  }finally{
+    bt.disabled = false; bt.textContent = 'Enviar link';
+    ok.hidden = false;
+    ok.textContent = 'Se este e-mail tiver acesso ao portal, o link chega em alguns minutos. ' +
+                     'Confira também a caixa de spam.';
+  }
+});
+
+function desenharEmpresas(vin){
+  $('#listaEmpresas').innerHTML = vin.map((v,i) => {
+    const local = [v.cidade, v.uf].filter(Boolean).join(' · ');
+    const sub = [v.grupo_nome, local].filter(Boolean).join(' — ');
+    return '<button class="ecard" data-i="' + i + '">' +
+      '<span class="elg">' + esc(iniciais(v.nome)) + '</span><span>' +
+      '<span class="enm">' + esc(v.nome || v.id_cliente) + '</span>' +
+      (sub ? '<span class="ecnpj">' + esc(sub) + '</span>' : '') +
+      '</span></button>';
+  }).join('');
+  $$('#listaEmpresas .ecard').forEach(b => b.addEventListener('click',
+    () => escolherEmpresa(vin[+b.dataset.i])));
+  /* ⚠ Duas empresas com o MESMO CNPJ é caso real (SORRAG Matriz × Filial), e a
+     `portal_v_cliente` NÃO expõe CNPJ de propósito. Quem desempata agora é o
+     nome em destaque, com grupo e cidade/UF como coadjuvantes — o que, para
+     matriz × filial, distingue melhor do que o CNPJ (que é o mesmo). */
+}
+
+function escolherEmpresa(v){
+  Dados.setEmpresa({ id_cliente:v.id_cliente, nome:v.nome || v.id_cliente,
+                     grupo_nome:v.grupo_nome });
+  $('#empNome').innerHTML = '<b>' + esc(v.nome || v.id_cliente) + '</b>' +
+    (v.grupo_nome ? '<span style="opacity:.6"> · ' + esc(v.grupo_nome) + '</span>' : '');
+  CACHE = {}; AREA = '';
+  mostrar('app');
+  irPara('maquinas');
+}
+
+/* ── navegação ─────────────────────────────────────────────────────────── */
+$$('nav.side button[data-v]').forEach(b =>
+  b.addEventListener('click', () => { irPara(b.dataset.v); fecharMenu(); }));
+$('#btMenu').addEventListener('click', () => {
+  const n = $('#nav'), abriu = !n.classList.contains('on');
+  n.classList.toggle('on', abriu); $('#btMenu').setAttribute('aria-expanded', String(abriu));
+});
+function fecharMenu(){ $('#nav').classList.remove('on'); $('#btMenu').setAttribute('aria-expanded','false'); }
+$('#btSair').addEventListener('click', () => { Dados.sair(); CACHE = {}; mostrar('login'); });
+$('#btTrocar').addEventListener('click', async () => {
+  desenharEmpresas(await Dados.empresas()); mostrar('empresa'); fecharMenu();
+});
+
+async function irPara(v){
+  VISTA = v;
+  $$('nav.side button[data-v]').forEach(b =>
+    b.setAttribute('aria-current', b.dataset.v === v ? 'page' : 'false'));
+  $('#main').innerHTML = '<div class="hd"><h1>' + rotuloVista(v) + '</h1></div>' +
+    '<div class="grade">' + '<div class="skel"></div>'.repeat(3) + '</div>';
+  try{
+    if (v === 'maquinas')   await telaMaquinas();
+    if (v === 'andamento')  await telaAndamento();
+    if (v === 'relatorios') await telaRelatorios();
+    if (v === 'chamados')   await telaChamados();
+  }catch(e){
+    $('#main').innerHTML = '<div class="hd"><h1>' + rotuloVista(v) + '</h1></div>' +
+      '<div class="erro">Não consegui carregar agora. ' + esc(e.message) +
+      '<br><button class="btn gh sm" style="margin-top:9px" onclick="irPara(\'' + v + '\')">Tentar de novo</button></div>';
+  }
+}
+function rotuloVista(v){
+  return { maquinas:'Minhas máquinas', andamento:'Andamento das OS',
+           relatorios:'Relatórios', chamados:'Chamados' }[v] || '';
+}
+window.irPara = irPara;
+
+/* ── cabeçalho com o frescor do espelho ────────────────────────────────
+   🔑 O portal lê um ESPELHO com atraso de até 30 min. A tela diz isso.
+   Fingir tempo real seria pior que o atraso: o cliente confiaria num
+   número que pode estar velho e ninguém saberia por quê.               */
+async function cabecalho(titulo, sub){
+  let selo = '';
+  try{
+    const q = await Dados.frescor();
+    const t = haQuanto(q);
+    const velho = q && (Date.now() - new Date(q).getTime()) > CFG.atrasoEspelhoMin*60000*2;
+    if (t) selo = '<span class="frescor' + (velho ? ' velho' : '') + '" title="O portal lê uma cópia dos dados, atualizada a cada ' +
+      CFG.atrasoEspelhoMin + ' minutos."><span class="pt"></span>atualizado ' + esc(t) + '</span>';
+  }catch(e){}
+  return '<div class="hd"><h1>' + esc(titulo) + '</h1>' + selo + '</div>' +
+         (sub ? '<p class="sub">' + sub + '</p>' : '');
+}
+
+/* ── filtro de ÁREA (unidade) ───────────────────────────────────────────
+   🔑 Aparece só quando o usuário alcança MAIS DE UMA unidade. Responsável de
+   uma área só já recebe tudo filtrado pela RLS — mostrar um filtro de um item
+   só sugeriria que existe algo além, que ele não está vendo. */
+function selArea(unids){
+  if (!unids || unids.length < 2) return '';
+  return '<div class="filtros" id="fArea"><label for="inArea">Área</label>' +
+    '<select id="inArea"><option value="">Todas as áreas (' + unids.length + ')</option>' +
+    unids.map(u => '<option value="' + esc(u.unidade_id) + '"' +
+      (AREA === u.unidade_id ? ' selected' : '') + '>' + esc(u.nome) +
+      (u.tipo_area ? ' · ' + esc(u.tipo_area) : '') + '</option>').join('') +
+    '</select></div>';
+}
+function ligarArea(){
+  const sel = $('#inArea'); if (!sel) return;
+  sel.addEventListener('change', () => { AREA = sel.value; irPara(VISTA); });
+}
+const naArea = (m) => !AREA || m.unidade_id === AREA;
+
+/* ── 5.1 · MINHAS MÁQUINAS ─────────────────────────────────────────────── */
+async function telaMaquinas(){
+  const [maqsT, oss, vinc, unids] = await Promise.all(
+    [Dados.maquinas(), Dados.os(), Dados.osMaquina(), Dados.unidades()]);
+  const maqs = maqsT.filter(naArea);
+  CACHE.os = oss;
+  const porMaq = {};
+  vinc.forEach(v => { (porMaq[v.maquina_id] = porMaq[v.maquina_id] || []).push(v.id_os); });
+
+  const cards = maqs.map(m => {
+    const ids = porMaq[m.maquina_id] || [];
+    const abertas = oss.filter(o => ids.includes(o.id_os) && !o.encerrada);
+    const est = abertas.length
+      ? '<span class="chip c-or">◷ ' + esc(abertas[0].etapa) + '</span>'
+      : '<span class="chip c-ok">✓ Em operação</span>';
+    return '<article class="card clk" data-maq="' + esc(m.maquina_id) + '">' +
+      '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">' +
+        '<div><h3>' + esc([m.marca, m.modelo].filter(Boolean).join(' ')) +
+          (m.e_subsistema ? ' <span class="chip c-sub">' + esc(m.rotulo_item || 'Subsistema') + '</span>' : '') + '</h3>' +
+        '<div class="meta">' + esc(m.tag || 'sem TAG') +
+        (m.serie ? ' · série ' + esc(m.serie) : '') + '</div></div>' + est + '</div>' +
+      '<div style="margin-top:11px">' +
+        linhaKV('Área', m.unidade_nome) +
+        linhaKV('Local', m.localizacao) +
+        linhaKV('Horímetro', m.horimetro ? m.horimetro + ' h' : null) +
+        linhaKV('OS em aberto', abertas.length ? String(abertas.length) : 'nenhuma') +
+      '</div></article>';
+  }).join('');
+
+  $('#main').innerHTML = await cabecalho('Minhas máquinas',
+      'O parque que a Proper acompanha. Toque numa máquina para ver o histórico dela.') +
+    selArea(unids) +
+    (maqs.length ? '<div class="grade">' + cards + '</div>'
+                 : '<div class="vazio">' + (AREA
+                     ? 'Nenhuma máquina nesta área.'
+                     : 'Nenhuma máquina cadastrada para esta empresa ainda.') + '</div>');
+  ligarArea();
+  $$('#main .card[data-maq]').forEach(c =>
+    c.addEventListener('click', () => abrirMaquina(c.dataset.maq, maqs, oss, porMaq)));
+}
+function linhaKV(k, v){
+  if (v == null || v === '') return '';
+  return '<div class="kv"><span class="k">' + esc(k) + '</span><b>' + esc(v) + '</b></div>';
+}
+
+async function abrirMaquina(id, maqs, oss, porMaq){
+  const m = maqs.find(x => x.maquina_id === id) || {};
+  const ids = porMaq[id] || [];
+  const hist = oss.filter(o => ids.includes(o.id_os));
+  const docs = (await Dados.documentos()).filter(d => d.maquina_id === id);
+  modal([m.marca, m.modelo].filter(Boolean).join(' ') || 'Máquina',
+    (m.e_subsistema ? '<p style="margin:0 0 6px"><span class="chip c-sub">' + esc(m.rotulo_item || 'Subsistema') + '</span></p>' : '') +
+    '<p class="sub" style="margin-top:0">' + esc(m.tag || '') +
+      (m.serie ? ' · série ' + esc(m.serie) : '') + '</p>' +
+    linhaKV('Ano', m.ano) + linhaKV('Potência', m.potencia) +
+    linhaKV('Área', m.unidade_nome) +
+    linhaKV('Local', m.localizacao) + linhaKV('Horímetro', m.horimetro ? m.horimetro + ' h' : null) +
+    '<div class="secao"><h2>Histórico de atendimentos</h2><span class="tag">' + hist.length + '</span></div>' +
+    (hist.length ? hist.map(o =>
+      '<div class="kv"><span class="k mono">' + esc(o.numero_os) + ' · ' + esc(dt(o.data_abertura)) + '</span>' +
+      '<b>' + esc(o.etapa) + '</b></div>').join('')
+      : '<div class="vazio">Sem atendimentos registrados.</div>') +
+    '<div class="secao"><h2>Laudos desta máquina</h2><span class="tag">' + docs.length + '</span></div>' +
+    (docs.length ? docs.map(linhaDoc).join('') : '<div class="vazio">Nenhum laudo emitido ainda.</div>'));
+}
+
+/* ── 5.2 · ANDAMENTO (os dois kanbans) ─────────────────────────────────── */
+async function telaAndamento(){
+  const [ossT, vinc, maqs, unids] = await Promise.all(
+    [Dados.os(), Dados.osMaquina(), Dados.maquinas(), Dados.unidades()]);
+  const nomeMaq = {};
+  maqs.forEach(m => { nomeMaq[m.maquina_id] = [m.marca, m.modelo].filter(Boolean).join(' ') || m.tag; });
+  const maqDaOS = {};
+  vinc.forEach(v => { maqDaOS[v.id_os] = maqDaOS[v.id_os] || nomeMaq[v.maquina_id]; });
+
+  /* ⚠ Filtrar OS por área é a MESMA regra do `portal_ve_os()`: a OS entra se
+     ALGUMA máquina dela está na área. Consequência aceita em 16/08 — a OS que
+     atravessa áreas aparece nas duas, inteira. */
+  let oss = ossT;
+  if (AREA){
+    const daArea = maqs.filter(m => m.unidade_id === AREA).map(m => m.maquina_id);
+    const ids = vinc.filter(v => daArea.indexOf(v.maquina_id) >= 0).map(v => v.id_os);
+    oss = ossT.filter(o => ids.indexOf(o.id_os) >= 0);
+  }
+  CACHE.os = ossT;
+
+  const ativas = oss.filter(o => !o.encerrada);
+  const interno = ativas.filter(o => o.local_atendimento === 'interno');
+  const externo = ativas.filter(o => o.local_atendimento !== 'interno');
+
+  $('#main').innerHTML = await cabecalho('Andamento das OS',
+      'Onde cada máquina está agora. As etapas vêm do acompanhamento interno da Proper.') +
+    '<div class="aviso">Os serviços estão separados por onde acontecem: <b>na oficina Proper</b> ' +
+      '(a máquina veio para cá) e <b>na sua empresa</b> (nossa equipe vai até você).</div>' +
+    selArea(unids) +
+    secaoKanban('Serviço interno · na oficina Proper', interno, COLUNAS_INTERNO, maqDaOS) +
+    secaoKanban('Serviço externo · na sua empresa', externo, COLUNAS_EXTERNO, maqDaOS);
+  ligarArea();
+  ligarCardsOS();
+}
+
+function secaoKanban(titulo, lista, colunas, maqDaOS){
+  if (!lista.length){
+    return '<div class="secao"><h2>' + esc(titulo) + '</h2></div>' +
+           '<div class="vazio">Nada em andamento aqui no momento.</div>';
+  }
+  const cols = colunas.map(col => {
+    const doCol = lista.filter(o => o.etapa_ordem === col.ordem);
+    return '<div class="kb-col' + (col.foco ? ' foco' : '') + '">' +
+      '<h4>' + esc(col.rotulo) + '<span class="n">' + doCol.length + '</span></h4>' +
+      (doCol.length ? doCol.map(o => cardOS(o, maqDaOS)).join('')
+                    : '<div style="font-size:12px;color:var(--ink-3);padding:5px 2px">—</div>') +
+    '</div>';
+  }).join('');
+  return '<div class="secao"><h2>' + esc(titulo) + '</h2>' +
+         '<span class="tag">' + lista.length + ' em andamento</span></div>' +
+         '<div class="kb-wrap"><div class="kb">' + cols + '</div></div>';
+}
+function cardOS(o, maqDaOS){
+  return '<article class="kb-card" data-os="' + esc(o.id_os) + '">' +
+    '<div class="os">' + esc(o.numero_os) + '</div>' +
+    '<div class="mq">' + esc(maqDaOS[o.id_os] || 'Máquina') + '</div>' +
+    (o.data_prevista ? '<span class="chip c-mut">previsão ' + esc(dt(o.data_prevista)) + '</span>' : '') +
+    '</article>';
+}
+function ligarCardsOS(){
+  $$('#main [data-os]').forEach(c => c.addEventListener('click', () => abrirOS(c.dataset.os)));
+  // o degradê da borda some quando o quadro chega ao fim
+  $$('#main .kb-wrap').forEach(w => {
+    const marca = () => w.classList.toggle('fim', w.scrollLeft + w.clientWidth >= w.scrollWidth - 4);
+    w.addEventListener('scroll', marca, { passive:true }); marca();
+  });
+}
+
+async function abrirOS(id){
+  const o = (CACHE.os || []).find(x => x.id_os === id);
+  if (!o) return;
+  const docs = (await Dados.documentos()).filter(d => d.id_os === id);
+  modal('OS ' + o.numero_os,
+    '<p class="sub" style="margin-top:0">' + esc(rotuloTipo(o.tipo_os)) + ' · ' +
+      (o.local_atendimento === 'interno' ? 'na oficina Proper' : 'na sua empresa') + '</p>' +
+    '<div style="margin:4px 0 12px"><span class="chip ' +
+      (o.etapa_ordem === 30 ? 'c-or' : (o.encerrada ? 'c-ok' : 'c-cool')) + '">' +
+      esc(o.etapa) + '</span></div>' +
+    (o.etapa_ordem === 30 ? '<div class="aviso">Esta OS está <b>aguardando a sua aprovação</b>. ' +
+      'Assim que você responder ao orçamento, retomamos o serviço.</div>' : '') +
+    linhaKV('Abertura', dt(o.data_abertura)) +
+    linhaKV('Previsão', o.data_prevista ? dt(o.data_prevista) : null) +
+    linhaKV('Conclusão', o.fim_atendimento ? dt(o.fim_atendimento) : null) +
+    (o.descricao ? '<div class="secao"><h2>Descrição</h2></div><p style="font-size:13.5px;margin:0">' +
+       esc(o.descricao) + '</p>' : '') +
+    '<div class="secao"><h2>Laudos desta OS</h2><span class="tag">' + docs.length + '</span></div>' +
+    (docs.length ? docs.map(linhaDoc).join('')
+                 : '<div class="vazio">Nenhum laudo emitido nesta OS ainda.</div>'));
+}
+function rotuloTipo(t){
+  return ({ REFORMA_GERAL:'Reforma geral', DIAGNOSTICO:'Diagnóstico', PREVENTIVA:'Preventiva',
+    PREVENTIVA_PISTAO:'Preventiva', CORRETIVA:'Corretiva', ENTREGA_LOCACAO:'Entrega em locação',
+    GENERICA:'Serviço', INSPECAO_E_COMERCIAL:'Inspeção' })[t] || 'Serviço';
+}
+
+/* ── 5.3 · RELATÓRIOS ──────────────────────────────────────────────────── */
+async function telaRelatorios(){
+  const [docs, oss, maqs, vinc] = await Promise.all(
+    [Dados.documentos(), Dados.os(), Dados.maquinas(), Dados.osMaquina()]);
+  CACHE.os = oss; CACHE.docs = docs;
+  const nomeMaq = {}; maqs.forEach(m => { nomeMaq[m.maquina_id] = [m.marca,m.modelo].filter(Boolean).join(' ') || m.tag; });
+  const maqDaOS = {}; vinc.forEach(v => { maqDaOS[v.id_os] = maqDaOS[v.id_os] || v.maquina_id; });
+
+  $('#main').innerHTML = await cabecalho('Relatórios',
+      'Todos os laudos emitidos para as suas máquinas, agrupados por equipamento.') +
+    '<div class="filtros" id="filtros">' +
+      botaoFiltro('todos','Todos', true) + botaoFiltro('preventiva','Preventiva') +
+      botaoFiltro('corretiva','Corretiva') + botaoFiltro('reforma','Reforma') +
+    '</div><div id="listaRel"></div>';
+  $$('#filtros button').forEach(b => b.addEventListener('click', () => {
+    $$('#filtros button').forEach(x => x.setAttribute('aria-pressed','false'));
+    b.setAttribute('aria-pressed','true');
+    pintarRelatorios(b.dataset.f, docs, oss, maqDaOS, nomeMaq, maqs);
+  }));
+  pintarRelatorios('todos', docs, oss, maqDaOS, nomeMaq, maqs);
+}
+function botaoFiltro(f, rot, on){
+  return '<button data-f="' + f + '" aria-pressed="' + (on ? 'true' : 'false') + '">' + esc(rot) + '</button>';
+}
+function pintarRelatorios(filtro, docs, oss, maqDaOS, nomeMaq, maqs){
+  const tipoDaOS = {}; oss.forEach(o => { tipoDaOS[o.id_os] = o.tipo_os; });
+  const casa = (d) => {
+    if (filtro === 'todos') return true;
+    const t = String(tipoDaOS[d.id_os] || '').toUpperCase();
+    if (filtro === 'preventiva') return t.indexOf('PREVENTIVA') === 0;
+    if (filtro === 'corretiva')  return t === 'CORRETIVA';
+    if (filtro === 'reforma')    return t === 'REFORMA_GERAL' || t === 'DIAGNOSTICO';
+    return true;
+  };
+  const sel = docs.filter(casa);
+  if (!sel.length){
+    $('#listaRel').innerHTML = '<div class="vazio">Nenhum laudo neste filtro.</div>';
+    return;
+  }
+  const porMaq = {};
+  sel.forEach(d => {
+    const k = d.maquina_id || maqDaOS[d.id_os] || '—';
+    (porMaq[k] = porMaq[k] || []).push(d);
+  });
+  $('#listaRel').innerHTML = Object.keys(porMaq).map(k => {
+    const m = maqs.find(x => x.maquina_id === k);
+    return '<div class="secao"><h2>' + esc(nomeMaq[k] || 'Outros documentos') + '</h2>' +
+      (m && m.localizacao ? '<span class="tag">' + esc(m.localizacao) + '</span>' : '') + '</div>' +
+      '<div class="card">' + porMaq[k].map(linhaDoc).join('') + '</div>';
+  }).join('');
+  ligarDocs();
+}
+function linhaDoc(d){
+  return '<div class="doc"><span class="ic">PDF</span><span style="min-width:0;flex:1">' +
+    '<span class="nm">' + esc(d.titulo || d.nome) + '</span>' +
+    '<span class="dt">' + esc(d.os_numero) + ' · ' + esc(dt(d.emitido_em)) + '</span></span>' +
+    (CFG.downloadLaudo
+      ? '<button class="btn gh sm" data-doc="' + esc(d.documento_id) + '">Baixar</button>'
+      /* ⚠ O botão continua clicável de propósito: clicar e receber uma
+         explicação é melhor que um botão cinza que não diz nada. O que ele
+         NÃO faz é prometer download. */
+      : '<button class="btn gh sm" data-doc="' + esc(d.documento_id) + '" data-emb="1">Em breve</button>') +
+    '</div>';
+}
+function ligarDocs(){
+  $$('[data-doc]').forEach(b => b.addEventListener('click', () => {
+    const u = CFG.downloadLaudo && Dados.urlDocumento(b.dataset.doc);
+    if (u){ window.open(u, '_blank', 'noopener'); return; }
+    /* 🔑 Dizer o que falta e o que fazer enquanto isso. A alternativa — o botão
+       apontando para uma rota que não existe — daria erro de rede, que para o
+       cliente é "o portal está quebrado". */
+    modal('Download de laudo — em breve', CFG.fonte === 'mock'
+      ? '<p>Esta é uma demonstração: os laudos não são baixáveis aqui.</p>' +
+        '<p class="lgpd">A URL do Drive nunca é exposta ao navegador do cliente.</p>'
+      : '<p>O laudo <b>já existe</b> e está listado aqui — o download pelo portal ainda ' +
+        'está sendo liberado. Peça a cópia à Proper que enviamos na hora.</p>' +
+        '<p class="lgpd">Quando o download entrar, o arquivo virá por uma rota autenticada, ' +
+        'que confere se o documento é seu antes de entregar. A URL do Drive nunca é ' +
+        'exposta ao seu navegador.</p>');
+  }));
+}
+
+/* ── 5.4 · CHAMADOS ────────────────────────────────────────────────────── */
+async function telaChamados(){
+  const [chs, maqs] = await Promise.all([Dados.chamados(), Dados.maquinas()]);
+  $('#main').innerHTML = await cabecalho('Chamados',
+      'Abra um chamado e a administração da Proper confirma a data.') +
+    '<div class="card" style="margin-bottom:16px">' +
+      '<h3>Abrir chamado</h3>' +
+      '<label for="chMaq">Máquina</label>' +
+      '<select id="chMaq"><option value="">— selecione —</option>' +
+        maqs.map(m => '<option value="' + esc(m.maquina_id) + '">' +
+          esc([m.marca,m.modelo].filter(Boolean).join(' ')) + (m.tag ? ' · ' + esc(m.tag) : '') +
+          '</option>').join('') + '</select>' +
+      '<label for="chTxt">O que está acontecendo?</label>' +
+      '<textarea id="chTxt" rows="3" placeholder="Descreva o sintoma: ruído, vazamento, perda de pressão…"></textarea>' +
+      '<div style="height:12px"></div>' +
+      '<button class="btn" id="btChamado">Enviar chamado</button>' +
+      '<div id="chErro" class="erro" hidden></div>' +
+      '<p class="lgpd">O chamado entra numa fila e é confirmado pela administração, que define a ' +
+      'data prevista. Você recebe a confirmação por aqui.</p>' +
+    '</div>' +
+    '<div class="secao"><h2>Seus chamados</h2><span class="tag">' + chs.length + '</span></div>' +
+    (chs.length ? '<div class="grade">' + chs.map(cardChamado).join('') + '</div>'
+                : '<div class="vazio">Você ainda não abriu nenhum chamado.</div>');
+  $('#btChamado').addEventListener('click', enviarChamado);
+}
+function cardChamado(c){
+  const est = { fila:['c-mut','Fila de espera'], aprovado:['c-ok','Aprovado'],
+                recusado:['c-warn','Recusado'], convertido:['c-cool','Virou OS'] }[c.status] || ['c-mut', c.status];
+  return '<article class="card"><div style="display:flex;justify-content:space-between;gap:8px">' +
+    '<span class="meta">' + esc(dt(c.criado_em)) + '</span>' +
+    '<span class="chip ' + est[0] + '">' + esc(est[1]) + '</span></div>' +
+    '<p style="font-size:13.5px;margin:8px 0 0">' + esc(c.descricao) + '</p>' +
+    (c.data_prevista ? '<div class="kv" style="margin-top:9px"><span class="k">Data prevista</span><b>' +
+       esc(dt(c.data_prevista)) + '</b></div>' : '') + '</article>';
+}
+async function enviarChamado(){
+  const bt = $('#btChamado'), err = $('#chErro');
+  const txt = $('#chTxt').value.trim(), maq = $('#chMaq').value;
+  err.hidden = true;
+  if (txt.length < 10){
+    err.hidden = false; err.textContent = 'Descreva com um pouco mais de detalhe (ao menos 10 caracteres).';
+    return;
+  }
+  bt.disabled = true; bt.textContent = 'Enviando…';
+  try{
+    await Dados.abrirChamado({ descricao: txt, maquina_id: maq || null, origem: 'portal' });
+    $('#chTxt').value = ''; $('#chMaq').value = '';
+    await telaChamados();
+  }catch(e){
+    err.hidden = false; err.textContent = 'Não consegui enviar agora. Tente de novo.';
+  }finally{ bt.disabled = false; bt.textContent = 'Enviar chamado'; }
+}
+
+/* ── modal ─────────────────────────────────────────────────────────────── */
+function modal(titulo, html){
+  $('#mdTit').textContent = titulo;
+  $('#mdCorpo').innerHTML = html;
+  $('#modal').classList.add('on');
+  ligarDocs();
+  $('#btFecha').focus();
+}
+$('#btFecha').addEventListener('click', () => $('#modal').classList.remove('on'));
+$('#modal').addEventListener('click', e => { if (e.target.id === 'modal') $('#modal').classList.remove('on'); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') $('#modal').classList.remove('on'); });
+
+/* ── boot ──────────────────────────────────────────────────────────────── */
+(function boot(){
+  /* 🔑 O link do convite tem de ser olhado ANTES do login: quem chega por ele
+     não tem senha ainda, e cair na tela de "Entrar" seria um beco sem saída. */
+  const p = paramsDoLink();
+  if (p && p.erro){ limparURL(); linkInvalido(); return; }
+  if (p){ abrirTelaSenha(p); return; }
+
+  mostrar('login');
+  if (CFG.fonte === 'mock'){
+    const s = $('#selo');
+    s.hidden = false;
+    s.textContent = 'DEMONSTRAÇÃO · dados fictícios · nada vem de produção';
+    $('#inEmail').value = 'marcelo@sorrag.com.br';
+    $('#inSenha').value = 'Proper2026';
+    $('#btTrocar').hidden = false;
+  }
+})();
+</script>
+</body>
+</html>

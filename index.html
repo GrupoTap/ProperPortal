@@ -13,7 +13,7 @@
 
   build PORTAL_V5 · 23/08/2026
   V5 — BUILD DE PRODUÇÃO (repo GrupoTap/ProperPortal · Cloudflare Pages).
-       UMA única diferença para o V4: saiu a tag <script src="mock.js">.
+       UMA única diferença para o V4: saiu a tag que carregava o mock.
        Ela era inofensiva em execução — o consumo do mock é preguiçoso
        (`const M = () => window.PORTAL_MOCK`) e, com a origem apontada para o
        Supabase, ele nunca é chamado —, mas SEM o arquivo dá 404 no console de

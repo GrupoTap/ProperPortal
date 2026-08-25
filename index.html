@@ -11,6 +11,33 @@
   PORTAL DO CLIENTE — Proper Compressores                        15/08/2026
   portal.propercompressores.com.br
 
+  build PORTAL_V6 · 25/08/2026
+  V6 — O LAUDO BAIXA, DE VERDADE. Mais dois relatórios e o log de acesso.
+
+       🔴 O ACHADO QUE MUDOU O DESENHO: o V4/V5 abria o download com
+          `window.open(url)`. Navegação de janela NÃO manda cabeçalho
+          `Authorization` — o JWT nunca chegaria na Edge Function, e todo
+          download responderia 401. O botão estava escrito para um contrato
+          que não existe. É o mesmo defeito do `google_credential` do v113:
+          cano montado, água nunca ligada. Agora o download é `fetch` com o
+          Bearer, e o byte vira `<a download>` a partir de um Blob.
+       · `CFG.downloadLaudo = true` — a Edge Function `anexo` existe (Bloco B,
+         Opção 1: o GAS busca o byte no Drive).
+       · RELATÓRIOS 2 e 3: "Histórico do equipamento" (prontuário de uma
+         máquina) e "Gerencial do parque". Saem como FOLHA DE IMPRESSÃO —
+         `@media print` na própria página, sem biblioteca nova e sem tocar na
+         CSP. O cliente usa "Salvar como PDF" do navegador.
+         ⚠ A situação de preventiva sai das OS de preventiva que ESTE portal
+           enxerga. O plano de manutenção de verdade mora na aba VISITAS
+           (`Prox_Visita`), que NÃO é espelhada no Postgres — e a folha diz
+           isso, em vez de inventar um número que pareceria oficial.
+       · LGPD: `portal_acesso_log` passa a ser ESCRITA (entrada no portal e
+         abertura de documento). Existia desde o P8 com grant de insert e
+         nunca recebeu uma linha. Mais o aviso de privacidade, acessível de
+         qualquer tela.
+       · Nada renomeado: `urlDocumento` continua existindo e com o mesmo
+         contrato, e o `ligarDocs` continua sendo quem liga os botões.
+
   build PORTAL_V5 · 23/08/2026
   V5 — BUILD DE PRODUÇÃO (repo GrupoTap/ProperPortal · Cloudflare Pages).
        UMA única diferença para o V4: saiu a tag que carregava o mock.
@@ -277,6 +304,48 @@ main{padding:22px 24px 64px;min-width:0}
 #fArea{align-items:center;gap:9px}
 #fArea label{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3)}
 #fArea select{margin:0;max-width:320px}
+
+/* ══ V6 · FOLHA DE IMPRESSÃO ═══════════════════════════════════════════════
+   🔑 A folha é gerada NA PRÓPRIA PÁGINA e revelada só no `@media print`.
+      Foi escolha de arquitetura, não de preguiça:
+      · janela nova com `document.write` herda a CSP do portal e é bloqueada
+        por bloqueador de pop-up no celular — que é onde metade dos clientes
+        está;
+      · biblioteca de PDF (jsPDF e afins) custaria ~200 KB embutidos e um
+        `script-src` mais frouxo.
+      Assim, "Salvar como PDF" do próprio navegador entrega o arquivo, e a CSP
+      do `_headers` fica intocada.
+   ⚠ `#folha` é `hidden` na tela SEMPRE. Quem a mostra é só a impressão. */
+#folha{display:none}
+.fl-cab{display:flex;justify-content:space-between;align-items:flex-start;
+        border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:14px}
+.fl-cab h1{font-size:17px;margin:0 0 3px}
+.fl-cab .fl-emp{font-size:12px;color:#444}
+.fl-cab .fl-marca{font-size:12px;text-align:right;line-height:1.5}
+.fl-sec{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;
+        margin:16px 0 6px;padding-bottom:3px;border-bottom:1px solid #bbb}
+.fl-kv{display:grid;grid-template-columns:repeat(3,1fr);gap:4px 16px;font-size:11.5px}
+.fl-kv div{padding:2px 0}
+.fl-kv b{display:block;font-weight:600}
+.fl-kv span{color:#555}
+table.fl{width:100%;border-collapse:collapse;font-size:11px;margin-top:4px}
+table.fl th{text-align:left;background:#eee;padding:4px 6px;border:1px solid #bbb;font-weight:700}
+table.fl td{padding:4px 6px;border:1px solid #ccc;vertical-align:top}
+.fl-nota{font-size:10px;color:#555;margin-top:10px;line-height:1.5;
+         border-top:1px solid #ddd;padding-top:8px}
+.fl-tot{display:flex;gap:14px;flex-wrap:wrap;margin:8px 0 4px;font-size:11.5px}
+.fl-tot b{font-size:16px;display:block}
+.fl-tot > div{border:1px solid #bbb;border-radius:6px;padding:6px 12px;min-width:88px}
+
+@media print{
+  /* tudo some, menos a folha */
+  body > *:not(#folha){display:none !important}
+  #folha{display:block !important;padding:0;margin:0;color:#000;background:#fff;font-size:12px}
+  @page{margin:14mm 12mm}
+  table.fl{page-break-inside:auto}
+  table.fl tr{page-break-inside:avoid}
+  .fl-sec{page-break-after:avoid}
+}
 </style>
 </head>
 <body>
@@ -379,6 +448,9 @@ main{padding:22px 24px 64px;min-width:0}
       <button data-v="chamados"><span class="ic">◈</span>Chamados</button>
       <div class="sep">
         <button id="btTrocar" hidden><span class="ic">⇄</span>Trocar de empresa</button>
+        <!-- V6 — exigência de LGPD: o aviso tem de estar alcançável de
+             qualquer tela, não escondido num rodapé de login. -->
+        <button id="btPrivacidade"><span class="ic">⛉</span>Privacidade</button>
         <button id="btSair"><span class="ic">⏻</span>Sair</button>
       </div>
     </nav>
@@ -390,6 +462,10 @@ main{padding:22px 24px 64px;min-width:0}
   <div class="bx"><button class="fecha" id="btFecha" aria-label="Fechar">×</button>
     <h2 id="mdTit"></h2><div id="mdCorpo"></div></div>
 </div>
+
+<!-- V6 — a folha de impressão. Vazia até alguém pedir um relatório; visível
+     só dentro de @media print. -->
+<div id="folha" aria-hidden="true"></div>
 
 <div class="selo" id="selo" hidden></div>
 
@@ -430,11 +506,19 @@ const CFG = {
      cliente ficaria preso na tela de criar senha sem entender por quê.
      ⚠ Se um dia o dropdown do dashboard mudar, esta linha muda JUNTO. */
   senha: { min:10, minuscula:true, maiuscula:true, digito:true, simbolo:true },
-  /* 🔴 BLOCO B ADIADO (decisão de 19/08): a Edge Function que serve o byte do
-     Drive não existe. Enquanto for `false`, o portal DIZ isso — em vez de
-     oferecer um botão que falharia sem explicação.
-     Quando o bloco B entrar: virar `true`. É a única mudança necessária. */
-  downloadLaudo: false
+  /* ✅ V6 — o Bloco B ENTROU. A Edge Function `anexo` valida o JWT do cliente,
+     confere na `portal_v_documento` que o documento é dele (0 linhas ⇒ 404) e
+     busca o byte pelo GAS. Para voltar ao estado anterior — se a função cair,
+     por exemplo — basta `false` aqui: o botão volta a explicar em vez de
+     prometer. É o kill-switch desta feature. */
+  downloadLaudo: true,
+
+  /* ⚠ ESCRITA DE LOG (LGPD). Registra ENTRADA no portal e ABERTURA de
+     documento em `portal_acesso_log`, com o `user_id` do próprio JWT — a
+     policy do banco recusa gravar em nome de outro (rodada 2 do SQL).
+     🔑 Nunca bloqueia nada: se o log falhar, o cliente segue usando o portal.
+        Log é obrigação nossa, não penitência de quem usa. */
+  logAcesso: true
 };
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -548,7 +632,9 @@ const Dados = (() => {
       if (!r.ok) throw new Error('credenciais');
       const j = await r.json();
       sessao = { token: j.access_token, userId: j.user && j.user.id, email };
-      return sessao;
+      return sessao;   /* ⚠ o log da entrada é disparado por quem CHAMA (§boot),
+                          depois que a empresa ativa existe — logar aqui gravaria
+                          id_cliente vazio em toda linha. */
     },
     /* 🔧 P8: `portal_usuario_cliente` foi desativada. Quem responde "quais
        empresas eu alcanço" agora é a view, que já resolve os TRÊS escopos —
@@ -687,11 +773,80 @@ const Dados = (() => {
     abrirChamado: (c) => impl().abrirChamado(c),
     frescor: () => impl().frescor(),
     /* O byte do PDF NUNCA vem de URL do Drive. Sai por Edge Function que
-       valida o JWT e confere o dono do documento. No mock, avisa. */
+       valida o JWT e confere o dono do documento. No mock, avisa.
+       ⚠ MANTIDA com o mesmo contrato do V4 — quem chama continua chamando. */
     urlDocumento(id){
       return CFG.fonte === 'supabase'
         ? (CFG.supabase.url + '/functions/v1/anexo/' + encodeURIComponent(id))
         : null;
+    },
+
+    /* ══ V6 · O DOWNLOAD DE VERDADE ══════════════════════════════════════
+       🔴 POR QUE ISTO NÃO É `window.open`: navegação de janela não carrega
+          cabeçalho `Authorization`. A Edge Function exige `Bearer <JWT>` e
+          responderia 401 em TODO download — sem exceção, sem intermitência,
+          desde o primeiro clique. O botão do V4/V5 apontava para um contrato
+          que ele mesmo não conseguia cumprir.
+       ⇒ `fetch` com o Bearer → Blob → `<a download>` → `revokeObjectURL`.
+       ⚠ O objectURL é revogado SEMPRE (finally): sem isso cada laudo aberto
+         fica na memória da aba até o cliente fechar o portal. */
+    async baixarDocumento(id, nomeSugerido){
+      if (CFG.fonte !== 'supabase') throw new Error('demo');
+      if (!sessao || !sessao.token) throw new Error('sessao');
+
+      const r = await fetch(CFG.supabase.url + '/functions/v1/anexo/' + encodeURIComponent(id), {
+        method: 'GET',
+        headers: { Authorization: 'Bearer ' + sessao.token, apikey: CFG.supabase.anonKey }
+      });
+
+      if (!r.ok){
+        /* Cada código vira uma frase que a pessoa entende — e nenhuma delas
+           confirma que o documento existe (o 404 é o mesmo para "não é seu"). */
+        const e = new Error('http_' + r.status);
+        e.http = r.status;
+        throw e;
+      }
+
+      const blob = await r.blob();
+      const url  = URL.createObjectURL(blob);
+      try{
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = nomeSugerido || ('laudo-' + id + '.pdf');
+        a.rel = 'noopener';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } finally {
+        setTimeout(() => { try { URL.revokeObjectURL(url); } catch(e){} }, 4000);
+      }
+      return true;
+    },
+
+    /* ══ V6 · LOG DE ACESSO (LGPD) ═══════════════════════════════════════
+       ⚠ `user_id` vai explicitamente porque a policy EXIGE que ele bata com o
+         `sub` do JWT — gravar em nome de outro é recusado pelo banco.
+       ⚠ Silencioso por contrato: nenhum `throw`, nenhum `await` no caminho de
+         quem está usando a tela. */
+    registrarAcesso(evento, extra){
+      if (!CFG.logAcesso || CFG.fonte !== 'supabase') return;
+      if (!sessao || !sessao.userId) return;
+      try{
+        fetch(CFG.supabase.url + '/rest/v1/portal_acesso_log', {
+          method: 'POST',
+          headers: {
+            apikey: CFG.supabase.anonKey,
+            Authorization: 'Bearer ' + sessao.token,
+            'Content-Type': 'application/json',
+            Prefer: 'return=minimal'
+          },
+          body: JSON.stringify([Object.assign({
+            user_id: sessao.userId,
+            id_cliente: empresa && empresa.id_cliente,
+            evento: String(evento || '').slice(0, 60)
+          }, extra || {})])
+        }).catch(() => {});
+      }catch(e){ /* silêncio proposital */ }
     }
   };
 })();
@@ -891,6 +1046,11 @@ function escolherEmpresa(v){
   $('#empNome').innerHTML = '<b>' + esc(v.nome || v.id_cliente) + '</b>' +
     (v.grupo_nome ? '<span style="opacity:.6"> · ' + esc(v.grupo_nome) + '</span>' : '');
   CACHE = {}; AREA = '';
+  /* V6 — a linha de LGPD nasce AQUI, não no login: é neste ponto que existe
+     empresa ativa, e log sem empresa não responde a pergunta que uma auditoria
+     faz ("quem viu os dados de quem"). Trocar de empresa gera outra linha, de
+     propósito. */
+  try { Dados.registrarAcesso('entrou_no_portal'); } catch(e){}
   mostrar('app');
   irPara('maquinas');
 }
@@ -1141,13 +1301,27 @@ async function telaRelatorios(){
     '<div class="filtros" id="filtros">' +
       botaoFiltro('todos','Todos', true) + botaoFiltro('preventiva','Preventiva') +
       botaoFiltro('corretiva','Corretiva') + botaoFiltro('reforma','Reforma') +
-    '</div><div id="listaRel"></div>';
+    /* V6 — os relatórios 2 e 3 do escopo de 15/08. O 1 (laudo da OS) é a
+       lista abaixo: aquele PDF já existe e agora BAIXA. */
+    '</div>' +
+    '<div class="card" style="margin:14px 0">' +
+      '<h3 style="margin-top:0">Relatórios para imprimir</h3>' +
+      '<p class="sub" style="margin:2px 0 10px">Abrem a janela de impressão do navegador — ' +
+      'escolha <b>Salvar como PDF</b> para guardar o arquivo.</p>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+        '<button class="btn gh sm" id="btHist">Histórico de um equipamento</button>' +
+        '<button class="btn gh sm" id="btParque">Gerencial do parque</button>' +
+      '</div>' +
+    '</div>' +
+    '<div id="listaRel"></div>';
   $$('#filtros button').forEach(b => b.addEventListener('click', () => {
     $$('#filtros button').forEach(x => x.setAttribute('aria-pressed','false'));
     b.setAttribute('aria-pressed','true');
     pintarRelatorios(b.dataset.f, docs, oss, maqDaOS, nomeMaq, maqs);
   }));
   pintarRelatorios('todos', docs, oss, maqDaOS, nomeMaq, maqs);
+  $('#btHist').addEventListener('click',   () => escolherMaquinaParaHistorico(maqs, oss, vinc, docs));
+  $('#btParque').addEventListener('click', () => folhaParque(maqs, oss, vinc));
 }
 function botaoFiltro(f, rot, on){
   return '<button data-f="' + f + '" aria-pressed="' + (on ? 'true' : 'false') + '">' + esc(rot) + '</button>';
@@ -1185,7 +1359,8 @@ function linhaDoc(d){
     '<span class="nm">' + esc(d.titulo || d.nome) + '</span>' +
     '<span class="dt">' + esc(d.os_numero) + ' · ' + esc(dt(d.emitido_em)) + '</span></span>' +
     (CFG.downloadLaudo
-      ? '<button class="btn gh sm" data-doc="' + esc(d.documento_id) + '">Baixar</button>'
+      ? '<button class="btn gh sm" data-doc="' + esc(d.documento_id) + '" data-nome="' +
+        esc(d.nome || ('laudo-' + d.documento_id + '.pdf')) + '">Baixar</button>'
       /* ⚠ O botão continua clicável de propósito: clicar e receber uma
          explicação é melhor que um botão cinza que não diz nada. O que ele
          NÃO faz é prometer download. */
@@ -1193,9 +1368,44 @@ function linhaDoc(d){
     '</div>';
 }
 function ligarDocs(){
-  $$('[data-doc]').forEach(b => b.addEventListener('click', () => {
-    const u = CFG.downloadLaudo && Dados.urlDocumento(b.dataset.doc);
-    if (u){ window.open(u, '_blank', 'noopener'); return; }
+  $$('[data-doc]').forEach(b => {
+  /* 🔴 GUARDA DE LIGAÇÃO ÚNICA — defeito que já existia no V4/V5 e que só doeu
+     agora. `modal()` chama `ligarDocs()`, e `$$('[data-doc]')` varre o
+     DOCUMENTO INTEIRO: cada modal aberto pendurava MAIS UM listener nos mesmos
+     botões da lista de trás. Com o botão "Em breve" isso era inofensivo (abrir
+     o mesmo modal duas vezes não faz diferença). Com download de verdade vira
+     duas requisições por clique, dois arquivos salvos, e o rótulo preso em
+     "Baixando…" — porque o segundo handler restaura o texto que o primeiro já
+     tinha trocado.
+     Foi a bancada que pegou, no teste mais bobo da lista ("o botão volta ao
+     rótulo normal"). Nenhuma leitura de código teria olhado duas vezes. */
+  if (b.dataset.docLigado) return;
+  b.dataset.docLigado = '1';
+  b.addEventListener('click', async () => {
+    if (CFG.downloadLaudo && CFG.fonte === 'supabase'){
+      const rot = b.textContent;
+      b.disabled = true; b.textContent = 'Baixando…';
+      try{
+        await Dados.baixarDocumento(b.dataset.doc, b.dataset.nome);
+        Dados.registrarAcesso('abriu_documento', { documento_id: b.dataset.doc, resultado: 200 });
+      }catch(e){
+        /* 🔑 Uma frase por situação, todas escritas para o cliente. O 404 NÃO
+           diz "não é seu": diz que não encontrou — a mesma resposta que a
+           função dá para documento de outra empresa, de propósito. */
+        const s = e && e.http;
+        modal('Não consegui abrir o laudo',
+          s === 401 ? '<p>Sua sessão expirou. Entre no portal de novo e tente outra vez.</p>'
+        : s === 404 ? '<p>Não encontrei este documento. Se ele aparece na lista mas não abre, ' +
+                      'avise a Proper — pode ser um documento que foi substituído.</p>'
+        : s === 502 ? '<p>O arquivo não pôde ser baixado agora. Tente de novo em alguns minutos; ' +
+                      'se insistir, a Proper envia a cópia por e-mail.</p>'
+        :             '<p>Alguma coisa deu errado no download. Tente de novo em instantes.</p>');
+        Dados.registrarAcesso('abriu_documento', { documento_id: b.dataset.doc, resultado: s || 0 });
+      }finally{
+        b.disabled = false; b.textContent = rot;
+      }
+      return;
+    }
     /* 🔑 Dizer o que falta e o que fazer enquanto isso. A alternativa — o botão
        apontando para uma rota que não existe — daria erro de rede, que para o
        cliente é "o portal está quebrado". */
@@ -1207,7 +1417,8 @@ function ligarDocs(){
         '<p class="lgpd">Quando o download entrar, o arquivo virá por uma rota autenticada, ' +
         'que confere se o documento é seu antes de entregar. A URL do Drive nunca é ' +
         'exposta ao seu navegador.</p>');
-  }));
+  });
+  });
 }
 
 /* ── 5.4 · CHAMADOS ────────────────────────────────────────────────────── */
@@ -1262,6 +1473,233 @@ async function enviarChamado(){
     err.hidden = false; err.textContent = 'Não consegui enviar agora. Tente de novo.';
   }finally{ bt.disabled = false; bt.textContent = 'Enviar chamado'; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   §5.5 · V6 — AS FOLHAS DE IMPRESSÃO (relatórios 2 e 3 do escopo de 15/08)
+
+   🔑 Nada aqui pede dado novo ao servidor: as folhas são montadas com o que a
+      RLS JÁ entregou às telas. Um relatório que precisasse de consulta própria
+      seria uma segunda superfície de exposição para auditar — e não precisa
+      existir.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ⚠ NUNCA imprimir `tipo_os` cru. É a mesma regra que já vale para a fase da
+   OS ("Nova fase" existe em produção): nome interno não vai para a folha do
+   cliente. O que não estiver no mapa é embelezado, nunca vazado como enum. */
+const TIPO_ROTULO = {
+  PREVENTIVA:'Preventiva', PREVENTIVA_PISTAO:'Preventiva (pistão)',
+  CORRETIVA:'Corretiva', REFORMA_GERAL:'Reforma geral', DIAGNOSTICO:'Diagnóstico',
+  ENTREGA_LOCACAO:'Entrega de locação', INSPECAO_E_COMERCIAL:'Inspeção',
+  GENERICA:'Atendimento'
+};
+function tipoRotulo(t){
+  const k = String(t || '').toUpperCase();
+  if (TIPO_ROTULO[k]) return TIPO_ROTULO[k];
+  if (!k) return 'Atendimento';
+  const s = k.replace(/_/g, ' ').toLowerCase();
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+const ehPreventiva = (o) => String(o.tipo_os || '').toUpperCase().indexOf('PREVENTIVA') === 0;
+
+/* Hoje em AAAA-MM-DD, sem passar por toISOString (que é UTC e vira ontem de
+   madrugada no Brasil). */
+function hojeISO(){
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' +
+         String(d.getDate()).padStart(2,'0');
+}
+
+function cabecalhoFolha(titulo, sub){
+  const e = Dados.empresa || {};
+  return '<div class="fl-cab"><div>' +
+      '<h1>' + esc(titulo) + '</h1>' +
+      '<div class="fl-emp"><b>' + esc(e.nome || '') + '</b>' +
+        (e.grupo_nome ? ' · ' + esc(e.grupo_nome) : '') +
+        (sub ? '<br>' + esc(sub) : '') + '</div>' +
+    '</div><div class="fl-marca"><b>PROPER COMPRESSORES</b><br>' +
+      'Portal do Cliente<br>emitido em ' + esc(dt(hojeISO())) +
+    '</div></div>';
+}
+
+const NOTA_ESPELHO = '<div class="fl-nota">Documento gerado pelo Portal do Cliente a partir dos ' +
+  'dados que a Proper mantém sobre o seu parque. O portal lê uma cópia atualizada a cada ' +
+  CFG.atrasoEspelhoMin + ' minutos, então movimentações das últimas horas podem não aparecer. ' +
+  'Em caso de divergência, vale o registro da Proper.</div>';
+
+/* Mostra a folha só para a impressão e devolve a tela ao normal depois.
+   ⚠ O `afterprint` é o único jeito confiável de saber que a caixa fechou —
+     cancelar a impressão também dispara. Sem ele, `#folha` ficaria carregada
+     de dados de cliente na memória da aba até a próxima navegação. */
+function imprimirFolha(html){
+  const f = $('#folha');
+  f.innerHTML = html;
+  const limpar = () => { f.innerHTML = ''; window.removeEventListener('afterprint', limpar); };
+  window.addEventListener('afterprint', limpar);
+  setTimeout(() => { try { window.print(); } catch(e){ limpar(); } }, 60);
+}
+
+/* ── RELATÓRIO 2 · HISTÓRICO DO EQUIPAMENTO ─────────────────────────────── */
+function escolherMaquinaParaHistorico(maqs, oss, vinc, docs){
+  const lista = maqs.filter(naArea);
+  if (!lista.length){ modal('Histórico do equipamento', '<p>Não há máquinas nesta seleção.</p>'); return; }
+  modal('Histórico do equipamento',
+    '<p class="sub" style="margin-top:0">De qual equipamento?</p>' +
+    '<select id="selHist">' + lista.map((m,i) =>
+      '<option value="' + i + '">' + esc([m.marca,m.modelo].filter(Boolean).join(' ')) +
+      (m.tag ? ' · ' + esc(m.tag) : '') + (m.serie ? ' · série ' + esc(m.serie) : '') +
+      '</option>').join('') + '</select>' +
+    '<div style="height:12px"></div>' +
+    '<button class="btn" id="btGerarHist">Gerar folha</button>');
+  $('#btGerarHist').addEventListener('click', () => {
+    const m = lista[+$('#selHist').value];
+    $('#modal').classList.remove('on');
+    folhaHistorico(m, oss, vinc, docs);
+  });
+}
+
+function folhaHistorico(m, oss, vinc, docs){
+  const ids = vinc.filter(v => v.maquina_id === m.maquina_id).map(v => v.id_os);
+  const hist = oss.filter(o => ids.indexOf(o.id_os) >= 0)
+                  .sort((a,b) => String(b.data_abertura||'').localeCompare(String(a.data_abertura||'')));
+  const meus = docs.filter(d => d.maquina_id === m.maquina_id || ids.indexOf(d.id_os) >= 0);
+
+  const kv = (k,v) => v == null || v === '' ? '' : '<div><span>' + esc(k) + '</span><b>' + esc(v) + '</b></div>';
+
+  imprimirFolha(
+    cabecalhoFolha('Histórico do equipamento') +
+    '<div class="fl-sec">Identificação</div>' +
+    '<div class="fl-kv">' +
+      kv('Equipamento', [m.marca, m.modelo].filter(Boolean).join(' ')) +
+      kv('Série', m.serie) + kv('TAG', m.tag) + kv('Ano', m.ano) +
+      kv('Potência', m.potencia) + kv('Tipo', m.tipo_equip) +
+      kv('Área', m.unidade_nome) + kv('Local', m.localizacao) +
+      kv('Horímetro', m.horimetro ? m.horimetro + ' h' : null) +
+    '</div>' +
+
+    '<div class="fl-sec">Atendimentos (' + hist.length + ')</div>' +
+    (hist.length
+      ? '<table class="fl"><thead><tr><th>OS</th><th>Tipo</th><th>Abertura</th>' +
+        '<th>Previsto</th><th>Conclusão</th><th>Onde</th><th>Situação</th></tr></thead><tbody>' +
+        hist.map(o => '<tr><td>' + esc(o.numero_os) + '</td><td>' + esc(tipoRotulo(o.tipo_os)) +
+          '</td><td>' + esc(dt(o.data_abertura)) + '</td><td>' + esc(dt(o.data_prevista)) +
+          '</td><td>' + esc(dt(o.fim_atendimento)) + '</td><td>' +
+          (o.local_atendimento === 'interno' ? 'Oficina Proper' : 'Na sua empresa') +
+          '</td><td>' + esc(o.encerrada ? 'Concluída' : o.etapa) + '</td></tr>').join('') +
+        '</tbody></table>'
+      : '<p style="font-size:11.5px">Nenhum atendimento registrado para este equipamento.</p>') +
+
+    '<div class="fl-sec">Laudos emitidos (' + meus.length + ')</div>' +
+    (meus.length
+      ? '<table class="fl"><thead><tr><th>Documento</th><th>OS</th><th>Emitido em</th></tr></thead><tbody>' +
+        meus.map(d => '<tr><td>' + esc(d.titulo || d.nome) + '</td><td>' + esc(d.os_numero) +
+          '</td><td>' + esc(dt(d.emitido_em)) + '</td></tr>').join('') + '</tbody></table>' +
+        '<p style="font-size:10px;color:#555;margin-top:5px">Os arquivos em si ficam disponíveis ' +
+        'na aba Relatórios do portal.</p>'
+      : '<p style="font-size:11.5px">Nenhum laudo emitido para este equipamento até agora.</p>') +
+
+    NOTA_ESPELHO);
+}
+
+/* ── RELATÓRIO 3 · GERENCIAL DO PARQUE ──────────────────────────────────────
+   🔴 HONESTIDADE DO NÚMERO, e é o ponto mais importante desta folha:
+      a "próxima preventiva" aqui é a OS DE PREVENTIVA AGENDADA que este portal
+      enxerga — não é o plano de manutenção. O plano vive na aba VISITAS
+      (`Prox_Visita`), que NÃO é espelhada no Postgres, então o portal
+      literalmente não tem como saber dele.
+      Chamar isso de "vencida" sem essa ressalva produziria um relatório com
+      cara de oficial e conteúdo que a própria Proper não reconheceria. A folha
+      diz o que está medindo, na cara. */
+function folhaParque(maqs, oss, vinc){
+  const lista = maqs.filter(naArea);
+  const hoje = hojeISO();
+
+  const osDaMaq = {};
+  vinc.forEach(v => { (osDaMaq[v.maquina_id] = osDaMaq[v.maquina_id] || []).push(v.id_os); });
+  const porId = {}; oss.forEach(o => { porId[o.id_os] = o; });
+
+  const linhas = lista.map(m => {
+    const minhas = (osDaMaq[m.maquina_id] || []).map(id => porId[id]).filter(Boolean);
+    const prevs  = minhas.filter(ehPreventiva);
+
+    const feitas = prevs.filter(o => o.encerrada && o.fim_atendimento)
+      .map(o => String(o.fim_atendimento).slice(0,10)).sort();
+    const ultima = feitas.length ? feitas[feitas.length - 1] : null;
+
+    const agendadas = prevs.filter(o => !o.encerrada && o.data_prevista)
+      .map(o => String(o.data_prevista).slice(0,10)).sort();
+    const proxima = agendadas.length ? agendadas[0] : null;
+
+    const abertas = minhas.filter(o => !o.encerrada);
+
+    /* ⚠ Comparação de datas por STRING AAAA-MM-DD. É lexicograficamente igual à
+       cronológica e não constrói Date nenhuma — nenhum fuso entra aqui. */
+    let sit, ordem;
+    if (proxima && proxima < hoje)        { sit = 'Agendamento vencido'; ordem = 0; }
+    else if (proxima)                     { sit = 'Preventiva agendada'; ordem = 2; }
+    else if (abertas.length)              { sit = 'Em atendimento';      ordem = 1; }
+    else                                  { sit = 'Sem agendamento';     ordem = 3; }
+
+    return { m, ultima, proxima, abertas: abertas.length, sit, ordem };
+  }).sort((a,b) => a.ordem - b.ordem ||
+      String(a.proxima||'9').localeCompare(String(b.proxima||'9')));
+
+  const conta = (s) => linhas.filter(l => l.sit === s).length;
+
+  imprimirFolha(
+    cabecalhoFolha('Gerencial do parque',
+      AREA ? 'Somente a área selecionada' : 'Todas as áreas') +
+
+    '<div class="fl-tot">' +
+      '<div><b>' + lista.length + '</b>equipamentos</div>' +
+      '<div><b>' + conta('Preventiva agendada') + '</b>com preventiva agendada</div>' +
+      '<div><b>' + conta('Agendamento vencido') + '</b>com agendamento vencido</div>' +
+      '<div><b>' + conta('Em atendimento') + '</b>em atendimento</div>' +
+      '<div><b>' + conta('Sem agendamento') + '</b>sem agendamento</div>' +
+    '</div>' +
+
+    '<div class="fl-sec">Equipamentos</div>' +
+    (linhas.length
+      ? '<table class="fl"><thead><tr><th>Equipamento</th><th>TAG</th><th>Área / Local</th>' +
+        '<th>Última preventiva</th><th>Próxima agendada</th><th>OS abertas</th><th>Situação</th></tr></thead><tbody>' +
+        linhas.map(l => '<tr><td>' + esc([l.m.marca, l.m.modelo].filter(Boolean).join(' ')) +
+          (l.m.serie ? '<br><span style="color:#666">série ' + esc(l.m.serie) + '</span>' : '') +
+          '</td><td>' + esc(l.m.tag || '—') + '</td><td>' +
+          esc([l.m.unidade_nome, l.m.localizacao].filter(Boolean).join(' · ') || '—') +
+          '</td><td>' + esc(l.ultima ? dt(l.ultima) : '—') +
+          '</td><td>' + esc(l.proxima ? dt(l.proxima) : '—') +
+          '</td><td>' + (l.abertas || '—') +
+          '</td><td>' + esc(l.sit) + '</td></tr>').join('') +
+        '</tbody></table>'
+      : '<p style="font-size:11.5px">Nenhum equipamento nesta seleção.</p>') +
+
+    '<div class="fl-nota"><b>Como ler estas colunas.</b> ' +
+    '“Última preventiva” é a última OS de preventiva CONCLUÍDA. ' +
+    '“Próxima agendada” é a OS de preventiva já aberta com data prevista — ' +
+    '<b>é o agendamento, não o plano de manutenção</b>: um equipamento pode estar ' +
+    'em dia no plano da Proper e aparecer aqui como “sem agendamento” porque a OS ' +
+    'daquela visita ainda não foi aberta. Para o plano completo, fale com a Proper.</div>' +
+
+    NOTA_ESPELHO);
+}
+
+/* ── AVISO DE PRIVACIDADE ─────────────────────────────────────────────────── */
+function avisoPrivacidade(){
+  modal('Privacidade e uso dos seus dados',
+    '<p><b>O que este portal mostra.</b> Apenas o que diz respeito à empresa selecionada: ' +
+    'seus equipamentos, suas ordens de serviço, os laudos emitidos para eles e os chamados ' +
+    'que você abriu. A separação entre empresas é feita no banco de dados, não na tela.</p>' +
+    '<p><b>O que ele nunca mostra.</b> Valores e custos de outras ordens, anotações internas ' +
+    'da Proper, dados de qualquer outro cliente.</p>' +
+    '<p><b>O que registramos.</b> Sua entrada no portal e a abertura de cada documento, com ' +
+    'data, hora e o seu usuário. É o registro exigido pela LGPD para dado de cliente, e serve ' +
+    'para provar quem acessou o quê — inclusive a você.</p>' +
+    '<p><b>Base legal.</b> Execução do contrato de manutenção entre a sua empresa e a Proper.</p>' +
+    '<p><b>Seus direitos.</b> Para pedir cópia, correção ou exclusão dos seus dados, ou para ' +
+    'encerrar o seu acesso, fale com a Proper Compressores pelos canais de sempre.</p>' +
+    '<p class="lgpd">O acesso é individual e intransferível. Se mais alguém da sua empresa ' +
+    'precisar entrar, peça um convite para essa pessoa — não compartilhe a sua senha.</p>');
+}
+$('#btPrivacidade').addEventListener('click', () => { avisoPrivacidade(); fecharMenu(); });
 
 /* ── modal ─────────────────────────────────────────────────────────────── */
 function modal(titulo, html){

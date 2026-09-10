@@ -18,6 +18,46 @@
   PORTAL DO CLIENTE — Proper Compressores                        15/08/2026
   portal.propercompressores.com.br
 
+  build PORTAL_V9 · 10/09/2026
+  V9 — O LAUDO QUE NÃO BAIXAVA NA PRIMEIRA, E O OLHO NA SENHA. Feito em cima do V8.
+
+       Relato do Fernando (10/09, OS PGP-2026-0059): na ficha da máquina os
+       laudos não baixavam ("O arquivo não pôde ser baixado agora"); em
+       Relatórios, os MESMOS laudos baixavam.
+
+       🔑 MEDIDO, NÃO DEDUZIDO — não era a tela. Os logs da Edge Function
+          `anexo` mostram as quatro tentativas daquela manhã:
+             11:17:09 → 11:17:30  Diagnóstico   502   (1ª vez deste laudo)
+             11:17:50 → 11:18:11  Recebimento   502   (1ª vez deste laudo)
+             11:19:01 → 11:19:12  Diagnóstico   200
+             11:19:29 → 11:19:38  Recebimento   200
+          e as execuções do Apps Script, nos mesmos segundos: 16,5 s e 17,2 s
+          nas duas primeiras; 7,1 s e 5,7 s nas duas últimas. A PRIMEIRA leitura
+          de cada PDF no Drive é lenta; a segunda é rápida. Somado o trânsito do
+          arquivo, a primeira passava dos 20 s que a Edge espera o GAS
+          (`TIMEOUT_GAS_MS`) — e a Edge desistia com 502. A ficha da máquina
+          falhou porque foi a PRIMEIRA a ser usada; Relatórios funcionou porque
+          veio DEPOIS. Invertendo a ordem, o sintoma inverteria junto.
+          ⇒ Sem conserto, TODO laudo dá erro no primeiro clique do cliente.
+
+       · P1 — a entrega aguenta a primeira leitura: em falha de TRÂNSITO
+         (502/503/504/546 ou rede caída) o portal tenta de novo UMA vez,
+         sozinho, 1,5 s depois. 401 e 404 NUNCA repetem — não são transitórios,
+         e repetir 404 seria insistir num documento que não é da pessoa.
+         O botão diz "Preparando o laudo…" quando a espera passa de 6 s.
+         ⚠ O conserto de verdade é a Edge esperar mais (NEWFILE_edge_anexo v2,
+           55 s). Este aqui é a rede de segurança que funciona MESMO que a
+           Edge não seja republicada — e continua valendo depois dela.
+       · P2 — erro de download dentro de uma JANELA (ficha da máquina, OS)
+         aparece embaixo do próprio laudo. Antes, `modal()` trocava o
+         conteúdo da janela pela mensagem: a pessoa perdia a ficha que estava
+         lendo e não sabia mais qual laudo tinha falhado.
+       · P3 — botão de olho no login e nos dois campos de "Crie sua senha"
+         (pedido do Fernando). Volta a esconder sozinho ao enviar o formulário
+         e ao trocar de tela: senha à mostra não fica para trás na tela.
+         ⚠ Botão `type="button"` — dentro de <form>, um <button> sem tipo
+           ENVIA o formulário, e o olho viraria um "Entrar" escondido.
+
   build PORTAL_V8 · 25/08/2026
   V8 — A MARCA DO CLIENTE, AO LADO DA NOSSA. Feito em cima do V7.
 
@@ -224,6 +264,18 @@ label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-2);margin:1
 input[type=email],input[type=password],input[type=text],textarea,select{
   width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2)}
 input:focus,textarea:focus,select:focus{border-color:var(--or);background:#fff;outline:none}
+/* V9 (P3) — o olho da senha. O campo ganha folga à direita para o texto não
+   correr por baixo do botão. */
+.senha-box{position:relative}
+.senha-box input{padding-right:46px}
+.olho{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:38px;height:38px;
+  display:grid;place-items:center;border:0;border-radius:7px;background:none;cursor:pointer;
+  color:var(--ink-3);padding:0}
+.olho:hover{color:var(--ink);background:var(--line-2)}
+.olho:focus-visible{outline:2px solid var(--or);outline-offset:1px}
+.olho svg{width:20px;height:20px;display:block}
+/* V9 (P2) — erro de download dentro de uma janela: fica colado no laudo. */
+.doc + .erro.doc-erro{margin:-2px 0 10px}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;
   padding:11px 16px;border:0;border-radius:8px;cursor:pointer;font-weight:600;font-size:14.5px;
   background:linear-gradient(135deg,#EFA125,#F15922);color:#fff}
@@ -458,7 +510,7 @@ table.fl td{padding:4px 6px;border:1px solid #ccc;vertical-align:top}
       <label for="inEmail">E-mail</label>
       <input id="inEmail" type="email" autocomplete="username" required placeholder="voce@suaempresa.com.br">
       <label for="inSenha">Senha</label>
-      <input id="inSenha" type="password" autocomplete="current-password" required>
+      <div class="senha-box"><input id="inSenha" type="password" autocomplete="current-password" required><button type="button" class="olho" data-olho="inSenha" aria-controls="inSenha" aria-pressed="false" aria-label="Mostrar senha" title="Mostrar senha"></button></div>
       <div style="height:16px"></div>
       <button class="btn" type="submit" id="btLogin">Entrar</button>
       <div id="erroLogin" class="erro" hidden></div>
@@ -501,10 +553,10 @@ table.fl td{padding:4px 6px;border:1px solid #ccc;vertical-align:top}
     <p class="hint" id="hintSenha">Este acesso é seu e individual. A Proper não vê a sua senha.</p>
     <form id="fmSenha" novalidate>
       <label for="inNova">Nova senha</label>
-      <input id="inNova" type="password" autocomplete="new-password" required>
+      <div class="senha-box"><input id="inNova" type="password" autocomplete="new-password" required><button type="button" class="olho" data-olho="inNova" aria-controls="inNova" aria-pressed="false" aria-label="Mostrar senha" title="Mostrar senha"></button></div>
       <ul class="reg" id="regras"></ul>
       <label for="inNova2" style="margin-top:12px">Repita a senha</label>
-      <input id="inNova2" type="password" autocomplete="new-password" required>
+      <div class="senha-box"><input id="inNova2" type="password" autocomplete="new-password" required><button type="button" class="olho" data-olho="inNova2" aria-controls="inNova2" aria-pressed="false" aria-label="Mostrar senha" title="Mostrar senha"></button></div>
       <div style="height:16px"></div>
       <button class="btn" type="submit" id="btSenha">Salvar e entrar</button>
       <div id="erroSenha" class="erro" hidden></div>
@@ -619,6 +671,8 @@ const CFG = {
      por exemplo — basta `false` aqui: o botão volta a explicar em vez de
      prometer. É o kill-switch desta feature. */
   downloadLaudo: true,
+  /* V9 (P1) — pausa antes da única nova tentativa de download. */
+  downloadPausaRepetirMs: 1500,
 
   /* ⚠ ESCRITA DE LOG (LGPD). Registra ENTRADA no portal e ABERTURA de
      documento em `portal_acesso_log`, com o `user_id` do próprio JWT — a
@@ -903,14 +957,39 @@ const Dados = (() => {
        ⇒ `fetch` com o Bearer → Blob → `<a download>` → `revokeObjectURL`.
        ⚠ O objectURL é revogado SEMPRE (finally): sem isso cada laudo aberto
          fica na memória da aba até o cliente fechar o portal. */
-    async baixarDocumento(id, nomeSugerido){
+    /* ══ V9 (P1) · A PRIMEIRA LEITURA DE CADA LAUDO ══════════════════════
+       MEDIDO em 10/09: a 1ª leitura de um PDF no Drive leva 16–17 s dentro do
+       GAS; a 2ª, 6–7 s. Com o trânsito do arquivo, a 1ª passava do teto da
+       Edge (20 s) e voltava 502 — todo laudo falhava no primeiro clique e
+       funcionava no segundo. ⇒ Em falha de TRÂNSITO, uma nova tentativa,
+       sozinha. A essa altura o GAS já terminou a 1ª leitura e o arquivo está
+       quente: foi exatamente o que as tentativas manuais de 11:19 mostraram.
+       🔴 SÓ trânsito repete: 502/503/504/546 ou rede caída. 401 é sessão, 404
+          é "não é seu / não existe" — repetir não muda a resposta, e repetir
+          404 transformaria o portal em quem insiste num documento alheio.
+       ⚠ UMA vez só. Duas falhas seguidas não são mais "arquivo frio": são o
+         serviço fora, e a pessoa precisa saber disso agora, não em 1 minuto.
+       `aoRepetir` existe para a TELA dizer que está preparando o arquivo. */
+    async baixarDocumento(id, nomeSugerido, aoRepetir){
       if (CFG.fonte !== 'supabase') throw new Error('demo');
       if (!sessao || !sessao.token) throw new Error('sessao');
 
-      const r = await fetch(CFG.supabase.url + '/functions/v1/anexo/' + encodeURIComponent(id), {
+      const pedir = () => fetch(CFG.supabase.url + '/functions/v1/anexo/' + encodeURIComponent(id), {
         method: 'GET',
         headers: { Authorization: 'Bearer ' + sessao.token, apikey: CFG.supabase.anonKey }
       });
+      const TRANSITORIO = [502, 503, 504, 546];
+      let r = null, falhaRede = null;
+      for (let tentativa = 1; tentativa <= 2; tentativa++){
+        r = null; falhaRede = null;
+        try { r = await pedir(); } catch (e) { falhaRede = e; }
+        if (r && r.ok) break;
+        const repete = !r || TRANSITORIO.indexOf(r.status) >= 0;
+        if (!repete || tentativa === 2) break;
+        try { if (aoRepetir) aoRepetir(); } catch (e) {}
+        await new Promise(res => setTimeout(res, CFG.downloadPausaRepetirMs));
+      }
+      if (!r) throw falhaRede;             // rede caída nas duas: mesma frase de antes
 
       if (!r.ok){
         /* Cada código vira uma frase que a pessoa entende — e nenhuma delas
@@ -1041,7 +1120,52 @@ let AREA  = '';
 
 const TELAS = { login:'#telaLogin', empresa:'#telaEmpresa',
                 senha:'#telaSenha', recuperar:'#telaRecuperar' };
+/* ══ V9 (P3) · O OLHO DA SENHA ══════════════════════════════════════════
+   Um botão por campo. Mostra e esconde trocando o `type` do input — o valor,
+   o cursor e o `autocomplete` continuam os mesmos.
+   ⚠ `ocultarSenhas()` roda ao ENVIAR e ao TROCAR DE TELA: o gerenciador de
+     senhas do navegador reconhece o campo pelo `type=password` no envio, e
+     senha à mostra não pode ficar esquecida numa tela que a pessoa largou. */
+const OLHO_ABERTO  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
+  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/>' +
+  '<circle cx="12" cy="12" r="3"/></svg>';
+const OLHO_FECHADO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
+  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"/>' +
+  '<path d="M10.6 5.1A10.4 10.4 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.2M6.6 6.6C3.9 8.3 2 12 2 12s3.6 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/>' +
+  '<path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
+function pintarOlho(b, visivel){
+  b.innerHTML = visivel ? OLHO_FECHADO : OLHO_ABERTO;
+  b.setAttribute('aria-pressed', visivel ? 'true' : 'false');
+  const r = visivel ? 'Ocultar senha' : 'Mostrar senha';
+  b.setAttribute('aria-label', r); b.title = r;
+}
+function ligarOlhos(){
+  $$('[data-olho]').forEach(b => {
+    if (b.dataset.olhoLigado) return;          // mesma guarda de ligação única do ligarDocs
+    b.dataset.olhoLigado = '1';
+    pintarOlho(b, false);
+    b.addEventListener('click', () => {
+      const i = document.getElementById(b.dataset.olho);
+      if (!i) return;
+      const visivel = i.type === 'password';
+      i.type = visivel ? 'text' : 'password';
+      pintarOlho(b, visivel);
+      /* devolve o foco ao campo com o cursor no fim: quem clicou no olho no
+         meio da digitação continua digitando de onde parou */
+      try { i.focus({ preventScroll: true }); const n = i.value.length; i.setSelectionRange(n, n); } catch(e){}
+    });
+  });
+}
+function ocultarSenhas(){
+  $$('[data-olho]').forEach(b => {
+    const i = document.getElementById(b.dataset.olho);
+    if (i && i.type !== 'password'){ i.type = 'password'; pintarOlho(b, false); }
+  });
+}
+ligarOlhos();
+
 function mostrar(qual){
+  ocultarSenhas();                                  // V9 (P3)
   Object.keys(TELAS).forEach(k => {
     const el = $(TELAS[k]);
     el.hidden = (k !== qual);
@@ -1053,6 +1177,7 @@ function mostrar(qual){
 /* ── login ─────────────────────────────────────────────────────────────── */
 $('#fmLogin').addEventListener('submit', async (ev) => {
   ev.preventDefault();
+  ocultarSenhas();                                  // V9 (P3)
   const bt = $('#btLogin'), err = $('#erroLogin');
   err.hidden = true; bt.disabled = true; bt.textContent = 'Entrando…';
   try{
@@ -1147,6 +1272,7 @@ function linkInvalido(){
 
 $('#fmSenha').addEventListener('submit', async (ev) => {
   ev.preventDefault();
+  ocultarSenhas();                                  // V9 (P3)
   const err = $('#erroSenha'), bt = $('#btSenha');
   err.hidden = true;
   if (!pintarRegras()){
@@ -1588,23 +1714,45 @@ function ligarDocs(){
     if (CFG.downloadLaudo && CFG.fonte === 'supabase'){
       const rot = b.textContent;
       b.disabled = true; b.textContent = 'Baixando…';
+      /* V9 (P1) — espera longa ganha nome. A 1ª leitura de um laudo pode
+         passar de 20 s; um "Baixando…" parado esse tempo todo parece travado. */
+      const preparando = () => { if (b.disabled) b.textContent = 'Preparando o laudo…'; };
+      const tmEspera = setTimeout(preparando, 6000);
+      /* V9 (P2) — o botão está dentro de uma janela (ficha da máquina, OS)? */
+      const naJanela = !!(b.closest && b.closest('#mdCorpo'));
+      const linhaDoc = b.closest ? b.closest('.doc') : null;
+      if (linhaDoc && linhaDoc.nextElementSibling && linhaDoc.nextElementSibling.classList.contains('doc-erro'))
+        linhaDoc.nextElementSibling.remove();          // tentativa nova limpa o aviso da anterior
       try{
-        await Dados.baixarDocumento(b.dataset.doc, b.dataset.nome);
+        await Dados.baixarDocumento(b.dataset.doc, b.dataset.nome, preparando);
         Dados.registrarAcesso('abriu_documento', { documento_id: b.dataset.doc, resultado: 200 });
       }catch(e){
         /* 🔑 Uma frase por situação, todas escritas para o cliente. O 404 NÃO
            diz "não é seu": diz que não encontrou — a mesma resposta que a
            função dá para documento de outra empresa, de propósito. */
         const s = e && e.http;
-        modal('Não consegui abrir o laudo',
-          s === 401 ? '<p>Sua sessão expirou. Entre no portal de novo e tente outra vez.</p>'
-        : s === 404 ? '<p>Não encontrei este documento. Se ele aparece na lista mas não abre, ' +
-                      'avise a Proper — pode ser um documento que foi substituído.</p>'
-        : s === 502 ? '<p>O arquivo não pôde ser baixado agora. Tente de novo em alguns minutos; ' +
-                      'se insistir, a Proper envia a cópia por e-mail.</p>'
-        :             '<p>Alguma coisa deu errado no download. Tente de novo em instantes.</p>');
+        const frase =
+            s === 401 ? '<p>Sua sessão expirou. Entre no portal de novo e tente outra vez.</p>'
+          : s === 404 ? '<p>Não encontrei este documento. Se ele aparece na lista mas não abre, ' +
+                        'avise a Proper — pode ser um documento que foi substituído.</p>'
+          : (s === 502 || s === 503 || s === 504 || s === 546)
+                      ? '<p>O arquivo não pôde ser baixado agora. Tente de novo em alguns minutos; ' +
+                        'se insistir, a Proper envia a cópia por e-mail.</p>'
+          :             '<p>Alguma coisa deu errado no download. Tente de novo em instantes.</p>';
+        if (naJanela && linhaDoc){
+          /* V9 (P2) — NÃO troca a janela: a pessoa continua vendo a ficha e
+             sabe exatamente qual laudo falhou. */
+          const aviso = document.createElement('div');
+          aviso.className = 'erro doc-erro';
+          aviso.setAttribute('role', 'alert');
+          aviso.innerHTML = '<b>Não consegui abrir o laudo.</b> ' + frase.replace(/<\/?p>/g, '');
+          linhaDoc.insertAdjacentElement('afterend', aviso);
+        } else {
+          modal('Não consegui abrir o laudo', frase);
+        }
         Dados.registrarAcesso('abriu_documento', { documento_id: b.dataset.doc, resultado: s || 0 });
       }finally{
+        clearTimeout(tmEspera);
         b.disabled = false; b.textContent = rot;
       }
       return;

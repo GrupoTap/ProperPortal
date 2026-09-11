@@ -18,6 +18,17 @@
   PORTAL DO CLIENTE — Proper Compressores                        15/08/2026
   portal.propercompressores.com.br
 
+  build PORTAL_V10 · 11/09/2026
+  V10 — ASSINATURAS: o cliente assina e aprova DENTRO do portal. Feito em cima do V9.
+       Menu "✍ Assinaturas" so para quem tem a prerrogativa (rpc
+       portal_pode_assinar_algum), com contador. Abrir o documento primeiro;
+       nome, CPF e "li e concordo"; assinatura desenhada no celular ou cursiva
+       gerada do nome no computador; orcamento se APROVA (sem desenho).
+       🔑 O cliente NUNCA devolve o PDF: sai so a assinatura, e a Edge
+          `documento` monta a copia assinada no servidor a partir do original,
+          conferindo o SHA-256 do pedido.
+       O orcamento (pdf_orcamento) sai da lista geral de documentos.
+  (V9, abaixo)
   build PORTAL_V9 · 10/09/2026
   V9 — O LAUDO QUE NÃO BAIXAVA NA PRIMEIRA, E O OLHO NA SENHA. Feito em cima do V8.
 
@@ -605,6 +616,8 @@ table.fl td{padding:4px 6px;border:1px solid #ccc;vertical-align:top}
       <button data-v="andamento"><span class="ic">◫</span>Andamento</button>
       <button data-v="relatorios"><span class="ic">▤</span>Relatórios</button>
       <button data-v="chamados"><span class="ic">◈</span>Chamados</button>
+      <!-- V10 — so aparece para quem tem ✍ numa concessao (o banco decide). -->
+      <button data-v="assinaturas" id="navAssin" hidden style="display:none"><span class="ic">✍</span>Assinaturas<span id="assinCont" hidden style="margin-left:auto;background:var(--or);color:#fff;border-radius:999px;font-size:11px;font-weight:700;padding:1px 7px"></span></button>
       <div class="sep">
         <button id="btTrocar" hidden><span class="ic">⇄</span>Trocar de empresa</button>
         <!-- V6 — exigência de LGPD: o aviso tem de estar alcançável de
@@ -1387,6 +1400,7 @@ async function irPara(v){
     if (v === 'andamento')  await telaAndamento();
     if (v === 'relatorios') await telaRelatorios();
     if (v === 'chamados')   await telaChamados();
+    if (v === 'assinaturas' && typeof telaAssinaturas === 'function') await telaAssinaturas();   // V10
   }catch(e){
     $('#main').innerHTML = '<div class="hd"><h1>' + rotuloVista(v) + '</h1></div>' +
       '<div class="erro">Não consegui carregar agora. ' + esc(e.message) +
@@ -1395,7 +1409,7 @@ async function irPara(v){
 }
 function rotuloVista(v){
   return { maquinas:'Minhas máquinas', andamento:'Andamento das OS',
-           relatorios:'Relatórios', chamados:'Chamados' }[v] || '';
+           relatorios:'Relatórios', chamados:'Chamados', assinaturas:'Assinaturas' }[v] || '';
 }
 window.irPara = irPara;
 
@@ -2095,6 +2109,268 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') $('#modal').
     $('#inEmail').value = 'marcelo@sorrag.com.br';
     $('#inSenha').value = 'Proper2026';
     $('#btTrocar').hidden = false;
+  }
+})();
+</script>
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   §V10 · ASSINATURAS — o cliente assina e aprova DENTRO do portal (Bloco S)
+   Par do SQL da rodada Campo (portal_assinatura / portal_v_assinatura /
+   rpc portal_pode_assinar_algum) e da Edge `documento` (POST /assinar).
+
+   🔑 O CLIENTE NUNCA DEVOLVE O DOCUMENTO. Daqui sai só: o id do pedido, o
+      nome, o CPF, o "li e concordo" e a imagem da assinatura (ou nada, no
+      orçamento, que se APROVA). O PDF assinado é montado no SERVIDOR, a partir
+      do original, e só se o SHA-256 bater com o do pedido.
+   🔑 QUEM VÊ O QUÊ É O BANCO. O menu só aparece para quem tem ✍ numa
+      concessão (rpc); a lista vem da view com a RLS. O front não decide nada
+      de segurança — o filtro por empresa abaixo é só para a tela bater com a
+      empresa escolhida, como nas outras telas.
+   ⚠ "Abra o documento antes de assinar": o botão só libera depois de o PDF
+     ter sido aberto NESTA sessão. Não é trava de segurança (quem quiser
+     assinar sem ler assina) — é o que torna o "li e concordo" verdadeiro.
+   ═══════════════════════════════════════════════════════════════════════════ */
+CFG.assinaturas = true;
+CFG.edgeDocumento = CFG.supabase.url + '/functions/v1/documento';
+
+const P10 = { pode: false, lista: [], abertos: {}, pend: null, desenhou: false };
+const P10_TIPO = { termo_desmontagem: 'Termo de Desmontagem', entrega_tecnica: 'Termo de Entrega Técnica', orcamento: 'Orçamento', outro: 'Documento' };
+function _p10EhOrcamento(d){
+  return String((d && d.categoria) || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').indexOf('pdf_orcamento') === 0;
+}
+
+/* ── dados ──────────────────────────────────────────────────────────────── */
+async function _p10Pode(){
+  if (!CFG.assinaturas) return false;
+  if (CFG.fonte !== 'supabase') return !!(window.PORTAL_MOCK && window.PORTAL_MOCK.assinaturas);
+  const sess = Dados.sessao; if (!sess || !sess.token) return false;
+  try{
+    const r = await fetch(CFG.supabase.url + '/rest/v1/rpc/portal_pode_assinar_algum', {
+      method: 'POST', body: '{}',
+      headers: { apikey: CFG.supabase.anonKey, Authorization: 'Bearer ' + sess.token, 'Content-Type': 'application/json', 'Accept-Profile': 'public' } });
+    if (!r.ok) return false;          // SQL da rodada ainda não rodou ⇒ o menu simplesmente não aparece
+    return (await r.json()) === true;
+  }catch(e){ return false; }
+}
+async function _p10Lista(){
+  if (CFG.fonte !== 'supabase') return JSON.parse(JSON.stringify((window.PORTAL_MOCK && window.PORTAL_MOCK.assinaturas) || []));
+  const sess = Dados.sessao;
+  const r = await fetch(CFG.supabase.url + '/rest/v1/portal_v_assinatura?select=*&order=pedido_em.desc', {
+    headers: { apikey: CFG.supabase.anonKey, Authorization: 'Bearer ' + sess.token, 'Accept-Profile': 'public' } });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const l = await r.json();
+  const emp = Dados.empresa && Dados.empresa.id_cliente;
+  return (l || []).filter(p => !emp || !p.id_cliente || p.id_cliente === emp);
+}
+async function _p10Assinar(corpo){
+  const sess = Dados.sessao;
+  let r = null, j = {};
+  try{
+    r = await fetch(CFG.edgeDocumento + '/assinar', {
+      method: 'POST', body: JSON.stringify(corpo),
+      headers: { apikey: CFG.supabase.anonKey, Authorization: 'Bearer ' + (sess && sess.token), 'Content-Type': 'application/json' } });
+    j = await r.json().catch(() => ({}));
+  }catch(e){ return { status: 0, j: { error: 'Sem conexão agora. Tente de novo em instantes.' } }; }
+  return { status: r.status, j: j || {} };
+}
+
+/* ── o menu e o contador ────────────────────────────────────────────────── */
+async function _p10AtualizarMenu(){
+  const b = document.getElementById('navAssin');
+  if (!b) return;
+  P10.pode = await _p10Pode();
+  b.hidden = !P10.pode; b.style.display = P10.pode ? '' : 'none';
+  if (!P10.pode) return;
+  try{
+    P10.lista = await _p10Lista();
+    const n = P10.lista.filter(p => p.estado === 'pendente').length;
+    const c = document.getElementById('assinCont');
+    if (c){ c.textContent = n ? String(n) : ''; c.hidden = !n; }
+  }catch(e){ /* o contador é aviso, não tela: sem ele, o menu continua */ }
+}
+
+/* ── a tela ─────────────────────────────────────────────────────────────── */
+async function telaAssinaturas(){
+  P10.lista = await _p10Lista();
+  const pend = P10.lista.filter(p => p.estado === 'pendente');
+  const feitos = P10.lista.filter(p => p.estado === 'assinado');
+  const outros = P10.lista.filter(p => p.estado === 'expirado' || p.estado === 'cancelado');
+  const c = document.getElementById('assinCont'); if (c){ c.textContent = pend.length ? String(pend.length) : ''; c.hidden = !pend.length; }
+  const cardPend = (p) => {
+    const aberto = !!P10.abertos[p.documento_id];
+    const verbo = p.acao === 'aprovar' ? 'Aprovar' : 'Assinar';
+    return '<div class="card" style="margin-bottom:12px" data-pend="' + esc(p.id) + '">' +
+      '<div style="font-weight:600">' + esc(P10_TIPO[p.tipo] || 'Documento') + ' — ' + esc(p.documento_nome || '') + '</div>' +
+      '<div class="sub" style="margin:4px 0 10px">OS ' + esc(p.os_numero || '') + (p.maquina_rotulo ? ' · ' + esc(p.maquina_rotulo) : '') +
+        ' · enviado por ' + esc(p.pedido_por || 'Proper') + ' em ' + esc(dt(p.pedido_em)) + ' · vale até ' + esc(dt(p.expira_em)) + '</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+        '<button class="btn gh sm" style="width:auto" data-p10abrir="' + esc(p.documento_id) + '" data-nome="' + esc(p.documento_nome || 'documento.pdf') + '">1 · Abrir o documento</button>' +
+        '<button class="btn sm" style="width:auto" data-p10assinar="' + esc(p.id) + '"' + (aberto ? '' : ' disabled title="Abra o documento antes"') + '>2 · ' + verbo + '</button>' +
+      '</div>' +
+      (aberto ? '' : '<div class="sub" style="margin-top:6px">Abra e leia o documento antes de ' + verbo.toLowerCase() + '.</div>') +
+    '</div>';
+  };
+  $('#main').innerHTML = await cabecalho('Assinaturas',
+      'Documentos que a Proper enviou para você assinar ou aprovar. A cópia assinada volta para os seus relatórios.') +
+    (pend.length ? '<div class="secao"><h2>Esperando você (' + pend.length + ')</h2></div>' + pend.map(cardPend).join('')
+                 : '<div class="vazio">Nenhum documento esperando a sua assinatura.</div>') +
+    (feitos.length ? '<div class="secao"><h2>Assinados</h2></div><div class="card">' + feitos.map(p =>
+      '<div class="doc"><span class="ic">✓</span><span style="min-width:0;flex:1"><span class="nm">' + esc(p.documento_nome || '') + '</span>' +
+      '<span class="dt">' + (p.acao === 'aprovar' ? 'Aprovado' : 'Assinado') + ' por ' + esc(p.assinante_nome || p.assinado_email || '') + ' em ' + esc(dt(p.assinado_em)) + ' · OS ' + esc(p.os_numero || '') + '</span></span>' +
+      (p.documento_assinado_id ? '<button class="btn gh sm" data-doc="' + esc(p.documento_assinado_id) + '" data-nome="' + esc('assinado-' + (p.documento_nome || 'documento.pdf')) + '">Baixar</button>' : '') +
+      '</div>').join('') + '</div>' : '') +
+    (outros.length ? '<div class="secao"><h2>Vencidos ou cancelados</h2></div><div class="card">' + outros.map(p =>
+      '<div class="doc"><span class="ic">—</span><span style="min-width:0;flex:1"><span class="nm">' + esc(p.documento_nome || '') + '</span>' +
+      '<span class="dt">' + (p.estado === 'expirado' ? 'O prazo venceu em ' + esc(dt(p.expira_em)) + ' — peça à Proper para enviar de novo.' : 'Cancelado pela Proper' + (p.motivo_cancelamento ? ' — ' + esc(p.motivo_cancelamento) : '') + '.') + '</span></span></div>').join('') + '</div>' : '');
+  ligarDocs();
+  $$('[data-p10abrir]').forEach(b => b.addEventListener('click', () => _p10Abrir(b)));
+  $$('[data-p10assinar]').forEach(b => b.addEventListener('click', () => _p10Folha(b.dataset.p10assinar)));
+}
+async function _p10Abrir(b){
+  const id = b.dataset.p10abrir, rot = b.textContent;
+  b.disabled = true; b.textContent = 'Abrindo…';
+  try{
+    await Dados.baixarDocumento(id, b.dataset.nome, () => { b.textContent = 'Preparando o documento…'; });
+    P10.abertos[id] = true;
+    Dados.registrarAcesso('abriu_documento', { documento_id: id, resultado: 200 });
+    const card = b.closest('[data-pend]');
+    const bt = card && card.querySelector('[data-p10assinar]');
+    if (bt){ bt.disabled = false; bt.removeAttribute('title'); }
+    const aviso = card && card.querySelector('.sub:last-child');
+    if (aviso && /Abra e leia/.test(aviso.textContent)) aviso.remove();
+  }catch(e){
+    modal('Não consegui abrir o documento', e && e.http === 404
+      ? '<p>Não encontrei este documento. Ele pode ter sido substituído pela Proper — recarregue a tela.</p>'
+      : '<p>O arquivo não pôde ser aberto agora. Tente de novo em instantes.</p>');
+  }finally{ b.disabled = false; b.textContent = rot; }
+}
+
+/* ── a folha de assinatura ──────────────────────────────────────────────── */
+function _p10Celular(){ return (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || window.innerWidth < 700; }
+function _p10CpfOk(c){
+  const d = String(c || '').replace(/\D/g, '');
+  if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
+  let s = 0; for (let i = 0; i < 9; i++) s += +d[i] * (10 - i);
+  let v = (s * 10) % 11; if (v === 10) v = 0; if (v !== +d[9]) return false;
+  s = 0; for (let i = 0; i < 10; i++) s += +d[i] * (11 - i);
+  v = (s * 10) % 11; if (v === 10) v = 0; return v === +d[10];
+}
+function _p10NomeOk(n){ return String(n || '').trim().split(/\s+/).filter(p => p.length >= 2).length >= 2; }
+function _p10Folha(pid){
+  const p = P10.lista.find(x => x.id === pid); if (!p) return;
+  P10.pend = p; P10.desenhou = false;
+  const aprovar = p.acao === 'aprovar';
+  const cel = _p10Celular();
+  modal(aprovar ? 'Aprovar o orçamento' : 'Assinar o documento',
+    '<p style="margin-top:0"><b>' + esc(p.documento_nome || '') + '</b><br><span class="sub">OS ' + esc(p.os_numero || '') + ' · ' + esc(P10_TIPO[p.tipo] || '') + '</span></p>' +
+    '<label class="rot" for="p10Nome">Nome completo</label><input id="p10Nome" autocomplete="name" style="width:100%" placeholder="Nome e sobrenome">' +
+    '<label class="rot" for="p10Cpf" style="margin-top:8px">CPF</label><input id="p10Cpf" inputmode="numeric" autocomplete="off" style="width:100%" placeholder="000.000.000-00" maxlength="14">' +
+    (aprovar ? '' :
+      '<label class="rot" style="margin-top:8px">Assinatura</label>' +
+      '<canvas id="p10Tela" width="600" height="180" style="width:100%;height:150px;border:1px dashed var(--line);border-radius:8px;background:#fff;touch-action:none"></canvas>' +
+      '<div style="display:flex;gap:8px;margin-top:4px"><button type="button" class="btn gh sm" style="width:auto" id="p10Limpar">Limpar</button>' +
+      '<span class="sub" id="p10Dica">' + (cel ? 'Assine com o dedo no quadro.' : 'Sua assinatura é gerada a partir do nome — ou desenhe com o mouse.') + '</span></div>') +
+    '<label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px"><input type="checkbox" id="p10Aceite" style="margin-top:3px">' +
+      '<span>Li o documento e concordo' + (aprovar ? ' com o orçamento' : '') + '.</span></label>' +
+    '<div id="p10Erro" class="erro" hidden style="margin-top:8px"></div>' +
+    '<button class="btn" id="p10Enviar" style="margin-top:12px">' + (aprovar ? 'Aprovar orçamento' : 'Assinar') + '</button>' +
+    '<p class="lgpd">Registramos o seu nome, CPF, e-mail do login, data, hora e o endereço de rede. O CPF completo fica guardado só no nosso banco; no documento vai mascarado.</p>');
+  const cpf = $('#p10Cpf');
+  cpf.addEventListener('input', () => {
+    const d = cpf.value.replace(/\D/g, '').slice(0, 11);
+    cpf.value = d.replace(/^(\d{3})(\d)/, '$1.$2').replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d)/, '.$1-$2');
+  });
+  if (!aprovar){
+    _p10Canvas(cel);
+    $('#p10Nome').addEventListener('input', () => { if (!cel && !P10.desenhou) _p10Cursiva(); });
+  }
+  $('#p10Enviar').addEventListener('click', _p10Enviar);
+}
+function _p10Canvas(cel){
+  const c = $('#p10Tela'); if (!c) return;
+  const g = c.getContext('2d');
+  g.lineWidth = 3; g.lineCap = 'round'; g.strokeStyle = '#111827';
+  let ativo = false;
+  const pt = (e) => { const r = c.getBoundingClientRect(); return { x: (e.clientX - r.left) * c.width / r.width, y: (e.clientY - r.top) * c.height / r.height }; };
+  c.addEventListener('pointerdown', (e) => {
+    if (!P10.desenhou) { g.clearRect(0, 0, c.width, c.height); }
+    ativo = true; P10.desenhou = true; P10.modo = 'desenhada';
+    const q = pt(e); g.beginPath(); g.moveTo(q.x, q.y); try { c.setPointerCapture(e.pointerId); } catch (x) {}
+  });
+  c.addEventListener('pointermove', (e) => { if (!ativo) return; const q = pt(e); g.lineTo(q.x, q.y); g.stroke(); P10.tracos = (P10.tracos || 0) + 1; });
+  const fim = () => { ativo = false; };
+  c.addEventListener('pointerup', fim); c.addEventListener('pointercancel', fim);
+  $('#p10Limpar').addEventListener('click', () => { g.clearRect(0, 0, c.width, c.height); P10.desenhou = false; P10.tracos = 0; if (!cel) _p10Cursiva(); });
+  P10.modo = cel ? 'desenhada' : 'cursiva'; P10.tracos = 0;
+}
+function _p10Cursiva(){
+  const c = $('#p10Tela'); if (!c) return;
+  const g = c.getContext('2d');
+  g.clearRect(0, 0, c.width, c.height);
+  const n = String(($('#p10Nome') || {}).value || '').trim();
+  if (!n) return;
+  g.fillStyle = '#111827';
+  g.font = 'italic 54px "Segoe Script","Brush Script MT","Lucida Handwriting",cursive';
+  g.textBaseline = 'middle';
+  const w = g.measureText(n).width, k = Math.min(1, (c.width - 40) / Math.max(w, 1));
+  g.save(); g.translate(20, c.height / 2); g.scale(k, k); g.fillText(n, 0, 0); g.restore();
+  P10.modo = 'cursiva';
+}
+async function _p10Enviar(){
+  const p = P10.pend; if (!p) return;
+  const err = $('#p10Erro'), bt = $('#p10Enviar');
+  const falha = (m) => { err.hidden = false; err.textContent = m; };
+  err.hidden = true;
+  const nome = $('#p10Nome').value.trim(), cpf = $('#p10Cpf').value;
+  const aprovar = p.acao === 'aprovar';
+  if (!_p10NomeOk(nome)) return falha('Digite o nome completo (nome e sobrenome).');
+  if (!_p10CpfOk(cpf)) return falha('CPF inválido — confira os números.');
+  if (!$('#p10Aceite').checked) return falha('Marque "Li o documento e concordo".');
+  let png = '', modo = aprovar ? 'aprovacao' : P10.modo;
+  if (!aprovar){
+    if (modo === 'cursiva') _p10Cursiva();
+    if (modo === 'desenhada' && !(P10.tracos > 3)) return falha('Desenhe a sua assinatura no quadro.');
+    png = $('#p10Tela').toDataURL('image/png');
+  }
+  bt.disabled = true; bt.textContent = 'Enviando…';
+  const r = await _p10Assinar({ pendencia_id: p.id, nome: nome, cpf: cpf.replace(/\D/g, ''), aceite: true, modo: modo,
+                                aparelho: _p10Celular() ? 'celular' : 'computador', assinatura_png: png });
+  Dados.registrarAcesso(aprovar ? 'aprovou_documento' : 'assinou_documento', { documento_id: p.documento_id, resultado: r.status });
+  if (r.status === 200 && r.j && r.j.ok){
+    $('#modal').classList.remove('on');
+    modal(aprovar ? 'Orçamento aprovado' : 'Documento assinado',
+      '<p>✅ ' + (aprovar ? 'Aprovação registrada' : 'Assinatura registrada') + '. A Proper foi avisada e a cópia ' + (aprovar ? 'aprovada' : 'assinada') +
+      ' já está disponível aqui em <b>Assinaturas</b>.</p>');
+    await _p10AtualizarMenu();
+    if (typeof VISTA !== 'undefined' && VISTA === 'assinaturas') { try { await telaAssinaturas(); } catch (e) {} }
+    return;
+  }
+  bt.disabled = false; bt.textContent = aprovar ? 'Aprovar orçamento' : 'Assinar';
+  const msg = (r.j && (r.j.error || r.j.erro || r.j.mensagem)) || '';
+  if (r.status === 401) return falha('Sua sessão expirou. Entre no portal de novo.');
+  if (r.status === 404) return falha('Este pedido não está mais disponível. Recarregue a tela.');
+  if (r.status === 409) { falha(msg || 'Este pedido não está mais aberto.'); try { await telaAssinaturas(); } catch (e) {} return; }
+  if (r.status === 400) return falha(msg || 'Confira os dados e tente de novo.');
+  return falha(msg || 'Não foi possível registrar agora. Tente de novo em instantes.');
+}
+
+/* ── os embrulhos ───────────────────────────────────────────────────────────
+   · o orçamento sai da lista GERAL de documentos (Relatórios, fichas): quem
+     pode vê-lo, vê em Assinaturas — é lá que ele se aprova.
+   · ao escolher a empresa, o menu pergunta ao banco se há o que assinar.   */
+(function(){
+  const docOrig = Dados.documentos;
+  Dados.documentos = async function(){
+    const l = await docOrig.apply(this, arguments);
+    return Array.isArray(l) ? l.filter(d => !_p10EhOrcamento(d)) : l;
+  };
+  const escOrig = window.escolherEmpresa;
+  if (typeof escOrig === 'function'){
+    window.escolherEmpresa = async function(){
+      const r = await escOrig.apply(this, arguments);
+      try { await _p10AtualizarMenu(); } catch (e) {}
+      return r;
+    };
   }
 })();
 </script>

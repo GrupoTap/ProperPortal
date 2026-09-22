@@ -7,6 +7,26 @@
 <meta name="color-scheme" content="light">
 <!--
   ══════════════════════════════════════════════════════════════════════
+  PORTAL_V14 — A MÁQUINA LOCADA NO PARQUE DO CLIENTE              22/09/2026
+  ══════════════════════════════════════════════════════════════════════
+  Pedido do Fernando: a Localiza Barueri aluga 2 compressores e 1 secador
+  da Proper Locação; os responsáveis dela têm de ver, no parque deles, as
+  máquinas próprias E as nossas, com um selo dizendo que são locadas.
+  · O SQL da rodada (frota_custodia + portal_maquinas_em_posse) faz a
+    view portal_v_maquina devolver a máquina em posse do cliente com
+    locada=true e rotulo_posse. Aqui só se DESENHA: selo no cartão e no
+    detalhe, "Dono: Proper Locação", "Com vocês desde", devolução prevista.
+  · A PLACA: o QR gravado na máquina abre /M/(TAG) — o Cloudflare Pages
+    serve este mesmo arquivo em qualquer caminho. Sem login, a tela de
+    entrada diz qual placa foi escaneada e oferece o PCM para a equipe
+    Proper; depois de entrar, o portal abre direto a máquina. Se a TAG não
+    estiver no acesso da pessoa, ele DIZ isso (nunca abre outra máquina).
+  ZERO Edge, ZERO GAS. SQL da rodada ANTES (sem ele, só não aparece o selo).
+  Bancada: _testes/NEWFILE_T_PORTAL_V14.mjs
+  ══════════════════════════════════════════════════════════════════════
+-->
+<!--
+  ══════════════════════════════════════════════════════════════════════
   PORTAL_V13 — GUARDA DE BOTÃO v2 (bloco PWAIT_V2)            21/09/2026
   ══════════════════════════════════════════════════════════════════════
   🔴 Fernando, 21/09: "estou tentando editar OS mas fica só processando e
@@ -36,7 +56,8 @@
   PORTAL DO CLIENTE — Proper Compressores                        15/08/2026
   portal.propercompressores.com.br
 
-  build PORTAL_V13 · 21/09/2026
+  build PORTAL_V14 · 22/09/2026
+  (contém o PORTAL_V13 · 21/09/2026)
   (contém o PORTAL_V12 · 17/09/2026)
   V12 — OS DOIS MOTORES PADRÃO + ERRO QUE NÃO ACONTECE EM SILÊNCIO.
        Feito em cima do V11 (que está na pasta e NÃO foi publicado: o que está
@@ -472,6 +493,9 @@ main{padding:22px 24px 64px;min-width:0}
 .c-mut{background:var(--surface-2);border-color:var(--line);color:var(--ink-2)}
 .c-or{background:var(--or-tint);border-color:#F6CFA9;color:#A8480F}
 .c-sub{background:#EEF2FF;border-color:#C7D2FE;color:#3730A3} /* V4 — selo de subsistema (8.1) */
+.c-loc{background:#FFF7ED;border-color:#FDBA74;color:#9A3412} /* V14 — máquina da Proper Locação em posse do cliente */
+.placa-lida{margin:0 0 14px;padding:10px 12px;border-radius:10px;background:#FFF7ED;border:1px solid #FDBA74;font-size:13px}
+.placa-lida a{font-weight:600}
 
 /* kanban */
 /* Sete colunas não cabem ao lado do menu num notebook, e espremer mais
@@ -1663,12 +1687,14 @@ async function telaMaquinas(){
       (selo ? '<div style="display:flex;justify-content:flex-end;margin-bottom:6px">' + selo + '</div>' : '') +
       '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">' +
         '<div><h3>' + esc([m.marca, m.modelo].filter(Boolean).join(' ')) +
-          (m.e_subsistema ? ' <span class="chip c-sub">' + esc(m.rotulo_item || 'Subsistema') + '</span>' : '') + '</h3>' +
+          (m.e_subsistema ? ' <span class="chip c-sub">' + esc(m.rotulo_item || 'Subsistema') + '</span>' : '') +
+          (m.locada ? ' <span class="chip c-loc">🔑 ' + esc(m.rotulo_posse || 'Locada · Proper Locação') + '</span>' : '') + '</h3>' +   /* V14 */
         '<div class="meta">' + esc(m.tag || 'sem TAG') +
         (m.serie ? ' · série ' + esc(m.serie) : '') + '</div></div>' + est + '</div>' +
       '<div style="margin-top:11px">' +
         linhaKV('Área', m.unidade_nome) +
         linhaKV('Local', m.localizacao) +
+        (m.locada ? linhaKV('Com vocês desde', dt(m.posse_desde)) : '') +   /* V14 */
         linhaKV('Horímetro', m.horimetro ? m.horimetro + ' h' : null) +
         linhaKV('OS em aberto', abertas.length ? String(abertas.length) : 'nenhuma') +
       '</div></article>';
@@ -1709,11 +1735,14 @@ async function abrirMaquina(id, maqs, oss, porMaq){
   const docs = (await Dados.documentos()).filter(d => d.maquina_id === id);
   modal([m.marca, m.modelo].filter(Boolean).join(' ') || 'Máquina',
     (m.e_subsistema ? '<p style="margin:0 0 6px"><span class="chip c-sub">' + esc(m.rotulo_item || 'Subsistema') + '</span></p>' : '') +
+    (m.locada ? '<p style="margin:0 0 6px"><span class="chip c-loc">🔑 ' + esc(m.rotulo_posse || 'Locada · Proper Locação') + '</span></p>' : '') +   /* V14 */
     '<p class="sub" style="margin-top:0">' + esc(m.tag || '') +
       (m.serie ? ' · série ' + esc(m.serie) : '') + '</p>' +
     linhaKV('Ano', m.ano) + linhaKV('Potência', m.potencia) +
     linhaKV('Área', m.unidade_nome) +
     linhaKV('Local', m.localizacao) + linhaKV('Horímetro', m.horimetro ? m.horimetro + ' h' : null) +
+    (m.locada ? linhaKV('Dono', m.dono_nome || 'Proper Locação') + linhaKV('Com vocês desde', dt(m.posse_desde)) +
+                linhaKV('Devolução prevista', m.posse_devolucao_prevista ? dt(m.posse_devolucao_prevista) : null) : '') +   /* V14 */
     '<div class="secao"><h2>Histórico de atendimentos</h2><span class="tag">' + hist.length + '</span></div>' +
     (hist.length ? hist.map(o =>
       '<div class="kv"><span class="k mono">' + esc(o.numero_os) + ' · ' + esc(dt(o.data_abertura)) + '</span>' +
@@ -3504,5 +3533,65 @@ try{
 </script>
 
 <!-- ████ FIM BLOCOS PADRAO UX ████ -->
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   §V14 · A PLACA QUE ABRE A MÁQUINA
+   O QR da placa (placas.html) grava HTTPS://PORTAL.PROPERCOMPRESSORES.COM.BR/M/<TAG>.
+   Aceita também ?m=<TAG> (link digitado, mais amigável).
+   🔑 A TAG sozinha não mostra NADA: a máquina só abre depois do login, e só se
+      a RLS a entregar para esta pessoa. Fora do acesso ⇒ o portal DIZ isso.
+   ⚠ A equipe da Proper também escaneia: o link "Abrir no sistema" leva ao PCM
+     (que pede o login do ProperHub, como sempre).
+   ═══════════════════════════════════════════════════════════════════════════ */
+const V14_PCM = 'https://grupotap.github.io/ProperAdmin/?maq=';
+const V14_PEDIDO = (function(){
+  try{
+    const m = /^\/m\/([^\/?#]+)/i.exec(location.pathname || '');
+    const q = new URLSearchParams(location.search || '').get('m');
+    const v = decodeURIComponent((m && m[1]) || q || '').trim().toUpperCase();
+    return /^[A-Z0-9][A-Z0-9 ._\/-]{0,39}$/.test(v) ? v : '';
+  }catch(e){ return ''; }
+})();
+let V14_FEITO = false;
+function _v14Aviso(html){
+  const g = document.querySelector('#telaLogin .gcard'); if (!g || document.getElementById('v14Placa')) return;
+  const d = document.createElement('div'); d.id = 'v14Placa'; d.className = 'placa-lida'; d.innerHTML = html;
+  const h1 = g.querySelector('h1'); (h1 && h1.nextSibling) ? g.insertBefore(d, h1.nextSibling) : g.appendChild(d);
+}
+if (V14_PEDIDO){
+  _v14Aviso('📷 Você escaneou a placa <b>' + esc(V14_PEDIDO) + '</b>. Entre para ver a máquina.' +
+    '<br><a href="' + V14_PCM + encodeURIComponent(V14_PEDIDO) + '">É da equipe Proper? Abrir no sistema →</a>');
+}
+// guarda a última lista que a tela recebeu, sem pedir de novo ao banco
+(function(){
+  const orig = Dados.maquinas;
+  Dados.maquinas = async function(){ const r = await orig.apply(this, arguments); window._v14Maqs = r; return r; };
+})();
+function _v14AbrirPedido(){
+  if (!V14_PEDIDO || V14_FEITO) return;
+  V14_FEITO = true;
+  const lista = window._v14Maqs || [];
+  const m = lista.filter(x => String(x.tag || '').trim().toUpperCase() === V14_PEDIDO ||
+                              String(x.maquina_id || '').trim().toUpperCase() === V14_PEDIDO)[0];
+  try{ if (/^\/m\//i.test(location.pathname)) history.replaceState(null, '', '/'); }catch(e){}
+  if (!m){
+    const main = document.getElementById('main');
+    if (main){
+      const d = document.createElement('div'); d.className = 'placa-lida';
+      d.innerHTML = 'A placa escaneada (<b>' + esc(V14_PEDIDO) + '</b>) não é de uma máquina do seu acesso' +
+        (Dados.empresa && Dados.empresa.nome ? ' em <b>' + esc(Dados.empresa.nome) + '</b>' : '') +
+        '. Se a máquina está com vocês, fale com a Proper.';
+      main.insertBefore(d, main.firstChild);
+    }
+    return;
+  }
+  const card = document.querySelector('#main .card[data-maq="' + (window.CSS && CSS.escape ? CSS.escape(m.maquina_id) : m.maquina_id) + '"]');
+  if (card) card.click();
+}
+(function(){
+  const orig = telaMaquinas;
+  telaMaquinas = async function(){ const r = await orig.apply(this, arguments); try{ _v14AbrirPedido(); }catch(e){} return r; };
+})();
+</script>
 </body>
 </html>

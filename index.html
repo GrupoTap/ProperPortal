@@ -7,6 +7,17 @@
 <meta name="color-scheme" content="light">
 <!--
   ══════════════════════════════════════════════════════════════════════
+  PORTAL_V15 — "ABRIR NO SISTEMA" VAI PARA A FICHA DE CELULAR     22/09/2026
+  ══════════════════════════════════════════════════════════════════════
+  Fernando escaneou a PL-CP-002: o link da equipe abria o PCM de COMPUTADOR
+  (modal largo) num celular. Agora vai para ProperAdmin/maquina.html (FICHA_V1),
+  a ficha feita para o celular, que pede tudo ao GAS v147 numa chamada só.
+  O QR da placa NÃO muda — placas já gravadas continuam valendo.
+  Bancada: _testes/NEWFILE_T_PORTAL_V14.mjs (atualizada: espera a ficha).
+  ══════════════════════════════════════════════════════════════════════
+-->
+<!--
+  ══════════════════════════════════════════════════════════════════════
   PORTAL_V14 — A MÁQUINA LOCADA NO PARQUE DO CLIENTE              22/09/2026
   ══════════════════════════════════════════════════════════════════════
   Pedido do Fernando: a Localiza Barueri aluga 2 compressores e 1 secador
@@ -56,7 +67,8 @@
   PORTAL DO CLIENTE — Proper Compressores                        15/08/2026
   portal.propercompressores.com.br
 
-  build PORTAL_V14 · 22/09/2026
+  build PORTAL_V15 · 22/09/2026
+  (contém o PORTAL_V14 · 22/09/2026)
   (contém o PORTAL_V13 · 21/09/2026)
   (contém o PORTAL_V12 · 17/09/2026)
   V12 — OS DOIS MOTORES PADRÃO + ERRO QUE NÃO ACONTECE EM SILÊNCIO.
@@ -3543,7 +3555,7 @@ try{
    ⚠ A equipe da Proper também escaneia: o link "Abrir no sistema" leva ao PCM
      (que pede o login do ProperHub, como sempre).
    ═══════════════════════════════════════════════════════════════════════════ */
-const V14_PCM = 'https://grupotap.github.io/ProperAdmin/?maq=';
+const V14_PCM = 'https://grupotap.github.io/ProperAdmin/maquina.html?tag=';   /* V15 — a ficha de celular (era o PCM de computador, ?maq=) */
 const V14_PEDIDO = (function(){
   try{
     const m = /^\/m\/([^\/?#]+)/i.exec(location.pathname || '');

@@ -10,7 +10,7 @@
   PORTAL_V15 — "ABRIR NO SISTEMA" VAI PARA A FICHA DE CELULAR     22/09/2026
   ══════════════════════════════════════════════════════════════════════
   Fernando escaneou a PL-CP-002: o link da equipe abria o PCM de COMPUTADOR
-  (modal largo) num celular. Agora vai para ProperAdmin/maquina.html (FICHA_V1),
+  (modal largo) num celular. Agora vai para a ficha de celular do sistema interno,
   a ficha feita para o celular, que pede tudo ao GAS v147 numa chamada só.
   O QR da placa NÃO muda — placas já gravadas continuam valendo.
   Bancada: _testes/NEWFILE_T_PORTAL_V14.mjs (atualizada: espera a ficha).
@@ -69,6 +69,27 @@
   Bancada: _testes/NEWFILE_T_PWAIT_V3.mjs
   ══════════════════════════════════════════════════════════════════════
 -->
+<!--
+  ══════════════════════════════════════════════════════════════════════
+  PORTAL_V17 — RELATO PELA PLACA · FOTO/VÍDEO NO CHAMADO · CRACHÁ   26/09/2026
+  ══════════════════════════════════════════════════════════════════════
+  Sugestão da Localiza Barueri + ressalva do Fernando na tela M1 ("é uma
+  porta que o cliente tem pra tentar entrar no nosso sistema interno").
+  · O link da equipe na tela de entrada SAIU, e o endereço interno
+    não existe mais neste arquivo. O celular da equipe é reconhecido por um
+    crachá que o ProperHub v26 entrega (o banco guarda só o sha256) e vai
+    direto para a ficha ao ler a placa.
+  · Quem lê a placa SEM login pode relatar (não é chamado): sintoma, texto,
+    até 3 fotos e — se a empresa liberar — 1 vídeo de 20 s gravado aqui.
+    Um aviso aberto por máquina: o 2º vira +1.
+  · Chamado com até 5 fotos e 2 vídeos (30 s / 25 MB), também depois de aberto.
+  · Chamados › "Relatos da equipe": o gestor confirma (vira chamado) ou
+    descarta com motivo, e liga/desliga o vídeo da empresa.
+  🔴 SQL ANTES (SUPABASE/RELATO_MIDIA_EQUIPE_2026-09-26.sql) e o _headers novo
+     (img-src/media-src com blob: e o Supabase) no MESMO commit.
+  Bancada: _testes/T_PORTAL_V17.mjs (com --controle contra o V16)
+  ══════════════════════════════════════════════════════════════════════
+-->
 <title>Portal do Cliente · Proper Compressores</title>
 <!-- V7 — ícones embutidos. Sem isto o navegador pede /favicon.ico e leva 404 em
      toda visita (estava anotado no backlog desde 23/08).
@@ -82,7 +103,8 @@
   PORTAL DO CLIENTE — Proper Compressores                        15/08/2026
   portal.propercompressores.com.br
 
-  build PORTAL_V16 · 26/09/2026
+  build PORTAL_V17 · 26/09/2026
+  (contém o PORTAL_V16 · 26/09/2026)
   (contém o PORTAL_V15 · 22/09/2026)
   (contém o PORTAL_V14 · 22/09/2026)
   (contém o PORTAL_V13 · 21/09/2026)
@@ -3634,10 +3656,11 @@ try{
    Aceita também ?m=<TAG> (link digitado, mais amigável).
    🔑 A TAG sozinha não mostra NADA: a máquina só abre depois do login, e só se
       a RLS a entregar para esta pessoa. Fora do acesso ⇒ o portal DIZ isso.
-   ⚠ A equipe da Proper também escaneia: o link "Abrir no sistema" leva ao PCM
-     (que pede o login do ProperHub, como sempre).
+   ⚠ V17 — a equipe da Proper NÃO usa mais link nesta tela: o celular dela é
+     reconhecido pelo crachá (§V17) e vai direto para a ficha.
    ═══════════════════════════════════════════════════════════════════════════ */
-const V14_PCM = 'https://grupotap.github.io/ProperAdmin/maquina.html?tag=';   /* V15 — a ficha de celular (era o PCM de computador, ?maq=) */
+/* V17 — a constante do endereço interno SAIU daqui. Quem é da equipe chega à ficha pelo
+   crachá do celular (§V17): o endereço vem do servidor, só para crachá válido. */
 const V14_PEDIDO = (function(){
   try{
     const m = /^\/m\/([^\/?#]+)/i.exec(location.pathname || '');
@@ -3653,8 +3676,7 @@ function _v14Aviso(html){
   const h1 = g.querySelector('h1'); (h1 && h1.nextSibling) ? g.insertBefore(d, h1.nextSibling) : g.appendChild(d);
 }
 if (V14_PEDIDO){
-  _v14Aviso('📷 Você escaneou a placa <b>' + esc(V14_PEDIDO) + '</b>. Entre para ver a máquina.' +
-    '<br><a href="' + V14_PCM + encodeURIComponent(V14_PEDIDO) + '">É da equipe Proper? Abrir no sistema →</a>');
+  _v14Aviso('📷 Você escaneou a placa <b>' + esc(V14_PEDIDO) + '</b>. Entre para ver a máquina.');   /* V17 — sem o link da equipe */
 }
 // guarda a última lista que a tela recebeu, sem pedir de novo ao banco
 (function(){
@@ -3687,5 +3709,804 @@ function _v14AbrirPedido(){
   telaMaquinas = async function(){ const r = await orig.apply(this, arguments); try{ _v14AbrirPedido(); }catch(e){} return r; };
 })();
 </script>
+<!-- ████ INICIO PORTAL_V17 ████ -->
+<style id="v17css">
+.v17-card{margin:18px 0 0;padding:14px;border:1px solid #F6CFA9;border-radius:12px;background:var(--or-tint)}
+.v17-card h3{font-size:15px;margin:0 0 4px}
+.v17-card p{font-size:13px;color:var(--ink-2);margin:0 0 10px}
+.v17-card .btn{background:#fff;color:#A8480F;border:1px solid #F1741F}
+.v17-mini{font-size:12px;color:var(--ink-2);margin:8px 0 0}
+.v17-maq{padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);font-size:13.5px;margin:0 0 6px}
+.v17-chips{display:flex;flex-wrap:wrap;gap:6px}
+.v17-chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 11px;font-size:13px;cursor:pointer}
+.v17-chip[aria-pressed="true"]{background:var(--or-tint);border-color:var(--or);color:#A8480F;font-weight:600}
+.v17-thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:2px}
+.v17-th{position:relative;width:64px;height:64px;border-radius:9px;border:1px solid var(--line);background:#EEEBE7 center/cover no-repeat;
+  cursor:pointer;padding:0;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff}
+.v17-th.vid{background:#2B2A2A}
+.v17-th.vid::after{content:"▶";font-size:18px}
+.v17-th .dur{position:absolute;left:0;right:0;bottom:0;background:rgba(43,42,42,.72);font-size:10px;text-align:center;padding:1px 0}
+.v17-th .x{position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:rgba(43,42,42,.85);color:#fff;
+  border:0;font-size:12px;line-height:18px;padding:0;cursor:pointer}
+.v17-add{width:64px;height:64px;border-radius:9px;border:1.5px dashed #C7C2BC;background:#fff;color:var(--ink-3);font-size:22px;cursor:pointer}
+.v17-add small{display:block;font-size:10px}
+.v17-prog{font-size:12.5px;margin:10px 0 0;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--surface-2)}
+.v17-prog div{display:flex;justify-content:space-between;gap:8px;padding:2px 0}
+.v17-alerta{padding:10px 12px;border-radius:10px;background:var(--warn-t);border:1px solid #F0C9B4;color:#8F3A12;font-size:13px;margin:0 0 12px}
+.v17-ok{padding:12px;border-radius:10px;background:#EDF6F0;border:1px solid #CBE4D6;color:#245C3C;font-size:13.5px}
+.v17-abas{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}
+.v17-abas button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:7px 13px;font-size:13px;cursor:pointer}
+.v17-abas button[aria-pressed="true"]{background:var(--char);color:#fff;border-color:var(--char)}
+.v17-abas .n{background:var(--or);color:#fff;border-radius:999px;font-size:11px;font-weight:700;padding:0 6px;margin-left:5px}
+.v17-nota{font-size:12.5px;border-left:3px solid var(--line);padding:3px 0 3px 9px;margin:6px 0;color:var(--ink-2)}
+.v17-acoes{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.v17-conf{display:flex;align-items:flex-start;gap:9px;font-size:13px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);margin:0 0 14px}
+.v17-conf input{margin-top:3px}
+.v17-rec{position:fixed;inset:0;z-index:90;background:rgba(20,20,20,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;color:#fff}
+.v17-rec video{width:100%;max-width:520px;max-height:62vh;border-radius:12px;background:#000}
+.v17-rec .t{font:600 15px/1.4 'IBM Plex Mono',monospace;margin:10px 0 6px}
+.v17-rec .bar{width:100%;max-width:520px;height:4px;border-radius:2px;background:rgba(255,255,255,.2)}
+.v17-rec .bar i{display:block;height:100%;width:0;background:var(--or);border-radius:2px}
+.v17-rec .dica{font-size:12.5px;opacity:.8;text-align:center;max-width:420px;margin:8px 0 12px}
+.v17-rec .bts{display:flex;gap:10px}
+.v17-rec .btn{width:auto;min-width:130px}
+.v17-rec .btn.gh{color:#fff;border-color:rgba(255,255,255,.4)}
+.v17-av{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:95;max-width:92vw;background:var(--char);color:#fff;
+  padding:10px 14px;border-radius:10px;font-size:13.5px;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+.v17-av.erro{background:#8F3A12}
+.v17-midia-full{max-width:100%;max-height:70vh;border-radius:10px;display:block;margin:0 auto}
+</style>
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   §V17 · RELATO PELA PLACA · FOTO/VÍDEO NO CHAMADO · CRACHÁ DA EQUIPE
+   26/09/2026 — sugestão da Localiza Barueri + ressalva do Fernando na tela M1.
+
+   1. CRACHÁ. O ProperHub (v26), ao logar no celular, manda o técnico até aqui
+      com #equipe=<token>. O token vai para o localStorage DESTE domínio; o banco
+      guarda só o sha256. Ao ler uma placa, se há crachá, o portal pergunta a
+      `portal_equipe_destino` e vai direto para a ficha. 🔑 O endereço interno
+      NÃO EXISTE neste arquivo: ele só chega a quem tem crachá válido. O cliente
+      não vê link, botão nem URL do sistema interno.
+   2. RELATO. Quem escaneia a placa sem login pode RELATAR (não é chamado): nome,
+      WhatsApp, sintoma, texto, até 3 fotos e — se a empresa liberou — 1 vídeo de
+      20 s gravado aqui. Um relato aberto por máquina: o 2º vira +1.
+   3. MÍDIA NO CHAMADO. O gestor logado anexa até 5 fotos e 2 vídeos (30 s,
+      25 MB) ao abrir o chamado — ou depois, enquanto ele está na fila.
+   4. RELATOS DA EQUIPE. Aba nova em Chamados: o gestor confirma (vira chamado)
+      ou descarta (com motivo) o que a equipe dele relatou pela placa.
+
+   O byte vai do navegador DIRETO para o Storage (bucket privado `portal-midia`,
+   caminho reservado por RPC). Nada passa pelo GAS aqui.
+   ⚠ Tudo depende do SQL da rodada e dos interruptores em `portal_config`
+     (relato · midia · equipe). Desligado ⇒ as telas novas simplesmente não
+     aparecem (portal_recursos), e o portal é o V16 de sempre.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const V17_BUILD = 'PORTAL_V17';
+const V17_LS_CRACHA = 'proper_equipe_cracha';
+const V17_LS_EU = 'proper_relato_eu';
+const V17_SINTOMAS = [['parou','Parou'],['ruido','Ruído estranho'],['vazamento','Vazamento'],
+                      ['alarme','Alarme no painel'],['sem_pressao','Sem pressão'],['outro','Outro']];
+const V17_SINT = Object.fromEntries(V17_SINTOMAS);
+const V17_LIM = { relato:{ fotos:3, videos:1, videoS:20, videoMB:8 }, chamado:{ fotos:5, videos:2, videoS:30, videoMB:25 } };
+
+function v17ls(k, v){
+  try{
+    if (v === undefined) return localStorage.getItem(k);
+    if (v === null) { localStorage.removeItem(k); return null; }
+    localStorage.setItem(k, v); return v;
+  }catch(e){ return null; }
+}
+function v17Digitos(s){ return String(s || '').replace(/\D/g, ''); }
+function v17Ha(iso){ return haQuanto(iso) || '—'; }
+function v17Num(n){ return 'R-' + ('000' + String(n || 0)).slice(-4); }
+function v17Aviso(msg, erro){
+  try{
+    const d = document.createElement('div'); d.className = 'v17-av' + (erro ? ' erro' : ''); d.setAttribute('role', 'status');
+    d.textContent = msg; document.body.appendChild(d);
+    setTimeout(() => { try{ d.remove(); }catch(e){} }, erro ? 7000 : 4500);
+  }catch(e){}
+}
+
+async function v17Rpc(nome, args, opts){
+  opts = opts || {};
+  const bearer = (!opts.anon && Dados.sessao && Dados.sessao.token) ? Dados.sessao.token : CFG.supabase.anonKey;
+  const r = await fetch(CFG.supabase.url + '/rest/v1/rpc/' + nome, {
+    method: 'POST',
+    headers: { apikey: CFG.supabase.anonKey, Authorization: 'Bearer ' + bearer, 'Content-Type': 'application/json' },
+    body: JSON.stringify(args || {}),
+    signal: (AbortSignal.timeout ? AbortSignal.timeout(opts.ms || 25000) : undefined)
+  });
+  const txt = await r.text();
+  let j = null; try{ j = txt ? JSON.parse(txt) : null; }catch(e){ j = null; }
+  if (!r.ok){ const e = new Error((j && (j.message || j.hint)) || ('HTTP ' + r.status)); e.http = r.status; throw e; }
+  return j;
+}
+let V17_REC = null, V17_REC_EM = 0;
+async function v17Recursos(){
+  if (V17_REC && Date.now() - V17_REC_EM < 120000) return V17_REC;
+  try{ V17_REC = (await v17Rpc('portal_recursos', {}, { ms: 12000 })) || {}; V17_REC_EM = Date.now(); }
+  catch(e){ V17_REC = {}; V17_REC_EM = Date.now() - 100000; }   // falhou: tenta de novo em ~20 s
+  return V17_REC;
+}
+function v17UrlAbs(s){
+  s = String(s || '');
+  if (/^https?:\/\//i.test(s)) return s;
+  if (s.indexOf('/storage/v1/') === 0) return CFG.supabase.url + s;
+  return CFG.supabase.url + '/storage/v1' + (s.charAt(0) === '/' ? '' : '/') + s;
+}
+async function v17Assinar(paths){
+  const out = {};
+  paths = (paths || []).filter(Boolean);
+  if (!paths.length || !Dados.sessao) return out;
+  try{
+    const r = await fetch(CFG.supabase.url + '/storage/v1/object/sign/portal-midia', {
+      method: 'POST',
+      headers: { apikey: CFG.supabase.anonKey, Authorization: 'Bearer ' + Dados.sessao.token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expiresIn: 3600, paths: paths })
+    });
+    const j = await r.json();
+    if (Array.isArray(j)) j.forEach(x => { if (x && x.path && x.signedURL && !x.error) out[x.path] = v17UrlAbs(x.signedURL); });
+  }catch(e){}
+  return out;
+}
+
+/* ── MÍDIA: foto reduzida · vídeo gravado aqui · vídeo de arquivo ────────── */
+async function v17ReduzirFoto(file){
+  const origem = URL.createObjectURL(file);
+  try{
+    const img = await new Promise((ok, falha) => {
+      const i = new Image();
+      i.onload = () => ok(i);
+      i.onerror = () => falha(new Error('Não consegui ler esta imagem. Tire a foto de novo pela câmera.'));
+      i.src = origem;
+    });
+    const max = 1600, k = Math.min(1, max / Math.max(img.naturalWidth || 1, img.naturalHeight || 1));
+    const w = Math.max(1, Math.round(img.naturalWidth * k)), h = Math.max(1, Math.round(img.naturalHeight * k));
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    c.getContext('2d').drawImage(img, 0, 0, w, h);
+    let b = await new Promise(ok => c.toBlob(ok, 'image/webp', 0.82));
+    /* Safari antigo não gera WebP: devolve PNG enorme. Aí vai JPEG. */
+    if (!b || b.type !== 'image/webp') b = await new Promise(ok => c.toBlob(ok, 'image/jpeg', 0.85));
+    if (!b) throw new Error('Não consegui preparar a foto.');
+    return { tipo: 'foto', blob: b, mime: b.type, thumb: URL.createObjectURL(b), st: 'fila' };
+  } finally { URL.revokeObjectURL(origem); }
+}
+function v17MimeVideo(t){
+  t = String(t || '').toLowerCase();
+  if (t.indexOf('mp4') >= 0) return 'video/mp4';
+  if (t.indexOf('quicktime') >= 0) return 'video/quicktime';
+  return 'video/webm';
+}
+/* 🔑 O VÍDEO NASCE PEQUENO: a página grava em 480p, 24 qps, ~1,2 Mbps e
+   corta sozinha no limite. 20 s ≈ 3 MB — sobe em segundos no 4G. Não se tenta
+   comprimir vídeo de câmera no navegador (seria baixar um conversor de 30 MB). */
+function v17Gravar(limiteS){
+  return new Promise((resolve) => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder){
+      v17Aviso('Este celular não grava vídeo pela página. Mande fotos.', true); resolve(null); return;
+    }
+    const tipos = ['video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp8,opus', 'video/webm'];
+    let mimeRec = '';
+    for (const t of tipos){ try{ if (MediaRecorder.isTypeSupported(t)) { mimeRec = t; break; } }catch(e){} }
+    const ov = document.createElement('div'); ov.className = 'v17-rec'; ov.setAttribute('role', 'dialog');
+    ov.innerHTML = '<video muted playsinline autoplay></video>' +
+      '<div class="t" id="v17RecT">0:00 / 0:' + String(limiteS).padStart(2, '0') + '</div>' +
+      '<div class="bar"><i id="v17RecB"></i></div>' +
+      '<div class="dica">Aponte para o painel, o vazamento ou a origem do barulho. O som é gravado. Para sozinho em ' + limiteS + ' s.</div>' +
+      '<div class="bts"><button class="btn" type="button" id="v17RecGo" data-pw-off>● Gravar</button>' +
+      '<button class="btn gh" type="button" id="v17RecX" data-pw-off>Cancelar</button></div>';
+    document.body.appendChild(ov);
+    const video = ov.querySelector('video'), btGo = ov.querySelector('#v17RecGo'), btX = ov.querySelector('#v17RecX');
+    let stream = null, rec = null, pedacos = [], t0 = 0, tick = null, auto = null, acabou = false;
+    function limpar(){
+      acabou = true; clearInterval(tick); clearTimeout(auto);
+      try{ if (stream) stream.getTracks().forEach(t => t.stop()); }catch(e){}
+      try{ ov.remove(); }catch(e){}
+    }
+    btX.onclick = () => { try{ if (rec && rec.state === 'recording') { rec.onstop = null; rec.stop(); } }catch(e){} limpar(); resolve(null); };
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 854 }, height: { ideal: 480 }, frameRate: { ideal: 24, max: 30 } },
+      audio: true
+    }).then(s => {
+      if (acabou) { s.getTracks().forEach(t => t.stop()); return; }
+      stream = s; video.srcObject = s;
+    }).catch(e => {
+      limpar();
+      v17Aviso(e && e.name === 'NotAllowedError'
+        ? 'Sem permissão para usar a câmera. Libere a câmera para este site nas configurações do navegador.'
+        : 'Não consegui abrir a câmera deste celular.', true);
+      resolve(null);
+    });
+    btGo.onclick = () => {
+      if (!stream) return;
+      if (rec && rec.state === 'recording') { rec.stop(); return; }
+      pedacos = [];
+      try{
+        rec = new MediaRecorder(stream, Object.assign({ videoBitsPerSecond: 1200000, audioBitsPerSecond: 32000 }, mimeRec ? { mimeType: mimeRec } : {}));
+      }catch(e){
+        try{ rec = new MediaRecorder(stream); }catch(e2){ limpar(); v17Aviso('Este celular não conseguiu gravar.', true); resolve(null); return; }
+      }
+      rec.ondataavailable = ev => { if (ev.data && ev.data.size) pedacos.push(ev.data); };
+      rec.onstop = () => {
+        const dur = Math.round((Date.now() - t0) / 100) / 10;
+        const mime = v17MimeVideo(rec.mimeType || mimeRec);
+        const blob = new Blob(pedacos, { type: mime });
+        limpar();
+        if (!blob.size) { v17Aviso('A gravação saiu vazia. Tente de novo.', true); resolve(null); return; }
+        resolve({ tipo: 'video', blob: blob, mime: mime, duracao: Math.min(dur, limiteS), thumb: null, st: 'fila' });
+      };
+      rec.start(1000); t0 = Date.now();
+      btGo.textContent = '■ Parar';
+      tick = setInterval(() => {
+        const s = Math.min(limiteS, (Date.now() - t0) / 1000);
+        const tt = ov.querySelector('#v17RecT'), bb = ov.querySelector('#v17RecB');
+        if (tt) tt.textContent = '0:' + String(Math.floor(s)).padStart(2, '0') + ' / 0:' + String(limiteS).padStart(2, '0');
+        if (bb) bb.style.width = (100 * s / limiteS) + '%';
+      }, 200);
+      auto = setTimeout(() => { try{ if (rec.state === 'recording') rec.stop(); }catch(e){} }, limiteS * 1000);
+    };
+  });
+}
+function v17VideoArquivo(file, limS, limMB){
+  return new Promise((ok, falha) => {
+    const mime = ['video/mp4', 'video/webm', 'video/quicktime'].indexOf(file.type) >= 0 ? file.type : '';
+    if (!mime) { falha(new Error('Formato de vídeo não aceito (' + (file.type || 'desconhecido') + '). Use MP4, ou grave pelo botão da página.')); return; }
+    if (file.size > limMB * 1024 * 1024) {
+      falha(new Error('Vídeo grande demais (' + (file.size / 1048576).toFixed(0) + ' MB; o limite é ' + limMB + ' MB). Grave pelo botão da página — ele já sai no tamanho certo.')); return;
+    }
+    const u = URL.createObjectURL(file), v = document.createElement('video');
+    let feito = false;
+    const fim = (d) => {
+      if (feito) return; feito = true; URL.revokeObjectURL(u);
+      if (d && isFinite(d) && d > limS + 1) { falha(new Error('Vídeo longo demais (' + Math.round(d) + ' s; o limite é ' + limS + ' s).')); return; }
+      ok({ tipo: 'video', blob: file, mime: mime, duracao: (d && isFinite(d)) ? Math.round(d * 10) / 10 : null, thumb: null, st: 'fila' });
+    };
+    v.preload = 'metadata'; v.muted = true;
+    v.onloadedmetadata = () => fim(v.duration);
+    v.onerror = () => fim(null);                 /* .mov no Chrome: sem duração — o servidor ainda confere o tamanho */
+    setTimeout(() => fim(null), 8000);
+    v.src = u;
+  });
+}
+function v17Subir(path, blob, mime, bearer, aoProgresso){
+  return new Promise((ok, falha) => {
+    const x = new XMLHttpRequest();
+    x.open('POST', CFG.supabase.url + '/storage/v1/object/portal-midia/' + path.split('/').map(encodeURIComponent).join('/'));
+    x.setRequestHeader('apikey', CFG.supabase.anonKey);
+    x.setRequestHeader('Authorization', 'Bearer ' + bearer);
+    x.setRequestHeader('Content-Type', mime);
+    x.setRequestHeader('x-upsert', 'false');
+    x.timeout = 180000;
+    x.upload.onprogress = e => { if (e.lengthComputable && aoProgresso) aoProgresso(e.loaded / e.total); };
+    x.onload = () => (x.status >= 200 && x.status < 300) ? ok() : falha(new Error('o armazenamento recusou (HTTP ' + x.status + ')'));
+    x.onerror = () => falha(new Error('Sem conexão — o arquivo NÃO foi enviado.'));
+    x.ontimeout = () => falha(new Error('Tempo esgotado — o arquivo NÃO foi enviado.'));
+    x.send(blob);
+  });
+}
+/* Envia os itens em fila, um de cada vez: reserva → sobe → confirma.
+   Item que falhou fica marcado e pode ser reenviado (o token do relato vale 30 min). */
+async function v17EnviarMidias(alvo, id, token, itens, pintar){
+  const anon = alvo === 'relato';
+  for (const it of itens){
+    if (it.st === 'ok') continue;
+    it.st = 'enviando'; it.pct = 0; it.erro = ''; pintar && pintar();
+    try{
+      const rs = await v17Rpc('portal_midia_reservar', { p_alvo: alvo, p_id: id, p_token: token || null, p_tipo: it.tipo,
+        p_mime: it.mime, p_bytes: it.blob.size, p_duracao: it.duracao == null ? null : it.duracao }, { anon: anon });
+      if (!rs || !rs.ok) throw new Error((rs && rs.erro) || 'O servidor recusou o arquivo.');
+      await v17Subir(rs.path, it.blob, it.mime, anon ? CFG.supabase.anonKey : Dados.sessao.token, p => { it.pct = p; pintar && pintar(); });
+      const cf = await v17Rpc('portal_midia_confirmar', { p_id: rs.id, p_token: token || null }, { anon: anon });
+      if (!cf || !cf.ok) throw new Error((cf && cf.erro) || 'O arquivo subiu, mas não consegui confirmar. Tente de novo.');
+      it.st = 'ok'; it.pct = 1;
+    }catch(e){ it.st = 'erro'; it.erro = (e && e.message) || 'falhou'; }
+    pintar && pintar();
+  }
+  return itens.every(i => i.st === 'ok');
+}
+/* (auditoria 26/09) URL dentro de url('…') no style: aspas simples, parênteses, barra
+   invertida e espaço viram %XX — o esc() não trata a aspa simples. Hoje só entra URL
+   gerada pelo servidor ou blob:, mas a trava fica aqui, não na esperança. */
+function v17CssUrl(u){
+  return String(u == null ? '' : u).replace(/['"()\\\s<>]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0'));
+}
+/* Os seletores (fotos + vídeo) — os mesmos para relato e chamado. */
+function v17HtmlSeletores(ctx, rotulos){
+  const L = V17_LIM[ctx.alvo];
+  const fotos = ctx.itens.filter(i => i.tipo === 'foto'), vids = ctx.itens.filter(i => i.tipo === 'video');
+  const th = (i, k) => '<span class="v17-th' + (i.tipo === 'video' ? ' vid' : '') + '"' +
+    (i.thumb ? ' style="background-image:url(\'' + esc(v17CssUrl(i.thumb)) + '\')"' : '') + '>' +
+    (i.tipo === 'video' && i.duracao ? '<span class="dur">' + Math.round(i.duracao) + ' s</span>' : '') +
+    (ctx.bloqueado || i.st === 'ok' ? '' : '<button type="button" class="x" data-v17x="' + k + '" aria-label="Remover" data-pw-off>×</button>') + '</span>';
+  let h = '';
+  if (ctx.midia){
+    h += '<label>Fotos <small style="font-weight:400">(até ' + L.fotos + ')</small></label><div class="v17-thumbs">' +
+      ctx.itens.map((i, k) => i.tipo === 'foto' ? th(i, k) : '').join('') +
+      (!ctx.bloqueado && fotos.length < L.fotos
+        ? '<button type="button" class="v17-add" data-v17foto data-pw-off aria-label="Adicionar foto">＋<small>foto</small></button>' : '') + '</div>';
+  }
+  if (ctx.midia && ctx.video){
+    h += '<label>Vídeo curto <small style="font-weight:400">(até ' + L.videoS + ' s' + (L.videos > 1 ? ', ' + L.videos + ' vídeos' : '') + ')</small></label><div class="v17-thumbs">' +
+      ctx.itens.map((i, k) => i.tipo === 'video' ? th(i, k) : '').join('') +
+      (!ctx.bloqueado && vids.length < L.videos
+        ? '<button type="button" class="v17-add" data-v17grava data-pw-off aria-label="Gravar vídeo">🎥<small>gravar</small></button>' +
+          (ctx.arquivoVideo ? '<button type="button" class="v17-add" data-v17vidarq data-pw-off aria-label="Escolher vídeo">📁<small>arquivo</small></button>' : '')
+        : '') + '</div>';
+  }
+  return h;
+}
+function v17HtmlProgresso(itens){
+  if (!itens.some(i => i.st && i.st !== 'fila')) return '';
+  return '<div class="v17-prog">' + itens.map((i, k) => '<div><span>' + (i.tipo === 'foto' ? '📷 foto ' : '🎥 vídeo ') + (k + 1) + '</span><span>' +
+    (i.st === 'ok' ? '✓ enviado' : i.st === 'enviando' ? ('⏳ ' + Math.round(100 * (i.pct || 0)) + '%') :
+     i.st === 'erro' ? ('<span style="color:#8F3A12">✕ ' + esc(i.erro) + '</span>') : 'na fila') + '</span></div>').join('') + '</div>';
+}
+function v17LigarSeletores(raiz, ctx, repintar){
+  const L = V17_LIM[ctx.alvo];
+  raiz.querySelectorAll('[data-v17x]').forEach(b => b.onclick = () => {
+    const i = ctx.itens.splice(Number(b.dataset.v17x), 1)[0];
+    try{ if (i && i.thumb) URL.revokeObjectURL(i.thumb); }catch(e){}
+    repintar();
+  });
+  const bf = raiz.querySelector('[data-v17foto]');
+  if (bf) bf.onclick = () => {
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
+    if (ctx.alvo === 'relato') inp.setAttribute('capture', 'environment'); else inp.multiple = true;
+    inp.onchange = async () => {
+      const fs = Array.from(inp.files || []);
+      for (const f of fs){
+        if (ctx.itens.filter(i => i.tipo === 'foto').length >= L.fotos) { v17Aviso('Limite de ' + L.fotos + ' fotos.'); break; }
+        try{
+          const fazer = () => v17ReduzirFoto(f);
+          const it = (window.PWAIT && PWAIT.demorado) ? await PWAIT.demorado(fazer, 'Preparando a foto…') : await fazer();
+          ctx.itens.push(it);
+        }catch(e){ v17Aviso(e.message, true); }
+      }
+      repintar();
+    };
+    inp.click();
+  };
+  const bg = raiz.querySelector('[data-v17grava]');
+  if (bg) bg.onclick = async () => { const it = await v17Gravar(L.videoS); if (it) { ctx.itens.push(it); repintar(); } };
+  const ba = raiz.querySelector('[data-v17vidarq]');
+  if (ba) ba.onclick = () => {
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'video/mp4,video/webm,video/quicktime';
+    inp.onchange = async () => {
+      const f = (inp.files || [])[0]; if (!f) return;
+      try{ ctx.itens.push(await v17VideoArquivo(f, L.videoS, L.videoMB)); repintar(); }
+      catch(e){ v17Aviso(e.message, true); }
+    };
+    inp.click();
+  };
+}
+function v17AbrirMidia(url, tipo){
+  if (!url) return;
+  modal(tipo === 'video' ? 'Vídeo' : 'Foto', tipo === 'video'
+    ? '<video class="v17-midia-full" controls playsinline preload="metadata" src="' + esc(url) + '"></video>'
+    : '<img class="v17-midia-full" alt="Foto do chamado" src="' + esc(url) + '">');
+}
+function v17Miniaturas(lista, urls){
+  const vis = (lista || []).filter(m => urls[m.path]);
+  if (!vis.length) return '';
+  return '<div class="v17-thumbs" style="margin-top:9px">' + vis.map(m => '<button type="button" class="v17-th' + (m.tipo === 'video' ? ' vid' : '') +
+    '" data-v17ver="' + esc(urls[m.path]) + '" data-v17tipo="' + esc(m.tipo) + '"' +
+    (m.tipo === 'foto' ? ' style="background-image:url(\'' + esc(v17CssUrl(urls[m.path])) + '\')"' : '') + ' aria-label="Abrir ' + (m.tipo === 'video' ? 'vídeo' : 'foto') + '" data-pw-off></button>').join('') + '</div>';
+}
+function v17LigarMiniaturas(raiz){
+  raiz.querySelectorAll('[data-v17ver]').forEach(b => b.onclick = () => v17AbrirMidia(b.dataset.v17ver, b.dataset.v17tipo));
+}
+
+/* ═══ 1 · O CRACHÁ ═════════════════════════════════════════════════════════ */
+function v17MontarGate(){
+  if (document.getElementById('telaRelato')) return;
+  const s = document.createElement('section');
+  s.className = 'gate'; s.id = 'telaRelato'; s.hidden = true; s.style.display = 'none';
+  s.innerHTML = '<div class="gcard"><div class="marca-gate"><div class="logo" role="img" aria-label="Proper Compressores"></div>' +
+                '<span>Portal do Cliente</span></div><div id="v17G"></div></div>';
+  const app = document.getElementById('app');
+  document.body.insertBefore(s, app || null);
+  TELAS.relato = '#telaRelato';
+}
+function v17Gate(html){ v17MontarGate(); document.getElementById('v17G').innerHTML = html; mostrar('relato'); }
+
+async function v17ReceberCracha(){
+  const h = new URLSearchParams(String(location.hash || '').replace(/^#/, ''));
+  const tok = h.get('equipe'); if (!tok) return false;
+  const volta = h.get('volta') || '';
+  /* ⚠ o token sai da barra de endereço ANTES de qualquer chamada (histórico e print). */
+  try{ history.replaceState(null, '', location.pathname + location.search); }catch(e){}
+  v17Gate('<h1>Reconhecendo este celular…</h1><p class="hint">Um instante.</p>');
+  let r = null;
+  try{ r = await v17Rpc('portal_equipe_destino', { p_token: tok }, { anon: true, ms: 15000 }); }catch(e){ r = null; }
+  if (r && r.ok){
+    v17ls(V17_LS_CRACHA, tok);
+    const pode = volta && r.volta_prefixo && volta.indexOf(r.volta_prefixo) === 0;
+    v17Gate('<h1>✔ Celular reconhecido</h1><div class="v17-ok">' + (r.nome ? '<b>' + esc(r.nome) + '</b> — ' : '') +
+      'a partir de agora, ao ler a placa de uma máquina da Proper, este celular abre direto a ficha.</div>' +
+      '<p class="hint" style="margin:14px 0 0">' + (pode ? 'Voltando…' : 'Pode fechar esta aba.') + '</p>');
+    if (pode) setTimeout(() => { location.replace(volta); }, 1200);
+    return true;
+  }
+  const motivo = r && r.motivo;
+  v17Gate('<h1>Não reconheci este celular</h1><div class="erro">' +
+    (motivo === 'desligado' ? 'O reconhecimento de celular da equipe está desligado no momento.'
+      : motivo === 'invalido' ? 'O link expirou ou já não vale. Entre de novo pelo ProperHub.'
+      : 'Sem resposta do servidor agora. Entre de novo pelo ProperHub mais tarde.') +
+    '</div><p class="hint" style="margin:14px 0 0"><a id="v17IrLogin">Ir para o login do portal</a></p>');
+  const a = document.getElementById('v17IrLogin'); if (a) a.onclick = () => mostrar('login');
+  return true;
+}
+async function v17PlacaComCracha(){
+  const tok = v17ls(V17_LS_CRACHA);
+  if (!V14_PEDIDO || !tok) return false;
+  const aviso = document.getElementById('v14Placa');
+  if (aviso) aviso.innerHTML = '📷 Placa <b>' + esc(V14_PEDIDO) + '</b> — abrindo a ficha da máquina…';
+  let r = null;
+  try{ r = await v17Rpc('portal_equipe_destino', { p_token: tok }, { anon: true, ms: 8000 }); }catch(e){ r = null; }
+  if (r && r.ok && r.ficha_url){ location.replace(r.ficha_url + encodeURIComponent(V14_PEDIDO)); return true; }
+  if (r && r.motivo === 'invalido') v17ls(V17_LS_CRACHA, null);   // crachá vencido/revogado: esquece
+  if (aviso) aviso.innerHTML = '📷 Você escaneou a placa <b>' + esc(V14_PEDIDO) + '</b>. Entre para ver a máquina.';
+  return false;
+}
+
+/* ═══ 2 · O RELATO PELA PLACA ══════════════════════════════════════════════ */
+const V17R = { info: null, fase: 'form', sintoma: '', desc: '', nome: '', tel: '', itens: [], token: '', id: '', numero: null,
+               ate: 0, enviando: false, erro: '', aberto: null, midia: false, video: false };
+async function v17CartaoLogin(){
+  if (!V14_PEDIDO) return;
+  const rec = await v17Recursos();
+  if (!rec.relato) return;
+  let info = null;
+  try{ info = await v17Rpc('portal_placa_info', { p_tag: V14_PEDIDO }, { anon: true, ms: 12000 }); }catch(e){ info = null; }
+  if (!info || !info.ok) return;                 /* placa desconhecida: NADA aparece (não confirma nem nega) */
+  V17R.info = info;
+  const g = document.querySelector('#telaLogin .gcard'); if (!g || document.getElementById('v17Cartao')) return;
+  const d = document.createElement('div'); d.className = 'v17-card'; d.id = 'v17Cartao';
+  d.innerHTML = '<h3>Não tem acesso ao portal?</h3>' +
+    '<p>Você pode avisar a Proper e o responsável da sua empresa sobre um problema <b>nesta máquina</b>, sem login.</p>' +
+    '<button type="button" class="btn" id="v17AbrirRelato">⚠ Relatar problema nesta máquina</button>' +
+    (info.aberto ? '<p class="v17-mini">Já há um aviso aberto para ela (' + v17Num(info.aberto.numero) + ', ' + esc(v17Ha(info.aberto.desde)) +
+      '). Você pode reforçá-lo.</p>' : '');
+  const lg = g.querySelector('.lgpd');
+  lg ? g.insertBefore(d, lg) : g.appendChild(d);
+  document.getElementById('v17AbrirRelato').onclick = () => v17AbrirRelato();
+}
+function v17AbrirRelato(){
+  const eu = (() => { try{ return JSON.parse(v17ls(V17_LS_EU) || '{}'); }catch(e){ return {}; } })();
+  if (!V17R.nome) V17R.nome = eu.nome || '';
+  if (!V17R.tel) V17R.tel = eu.tel || '';
+  V17R.midia = !!(V17R.info && V17R.info.midia);
+  V17R.video = !!(V17R.info && V17R.info.video);
+  V17R.aberto = (V17R.info && V17R.info.aberto) || null;
+  V17R.fase = V17R.aberto ? 'aberto' : 'form';
+  v17MontarGate(); mostrar('relato'); v17PintarRelato();
+}
+function v17LerCampos(){
+  const d = document.getElementById('v17Desc'), n = document.getElementById('v17Nome'), t = document.getElementById('v17Tel');
+  if (d) V17R.desc = d.value; if (n) V17R.nome = n.value; if (t) V17R.tel = t.value;
+}
+function v17PintarRelato(){
+  const el = document.getElementById('v17G'); if (!el) return;
+  const rot = (V17R.info && V17R.info.maquina && V17R.info.maquina.rotulo) || V14_PEDIDO;
+  const ctx = { alvo: 'relato', itens: V17R.itens, midia: V17R.midia, video: V17R.video, bloqueado: V17R.enviando };
+  let h = '';
+  if (V17R.fase === 'enviado'){
+    const falta = V17R.itens.some(i => i.st === 'erro');
+    const vivo = Date.now() < V17R.ate;
+    h = '<h1>Aviso enviado</h1><div class="v17-ok">✔ <b>' + v17Num(V17R.numero) + '</b> registrado.<br><br>' +
+        'Foram avisados o responsável da sua empresa no portal e a administração da Proper. ' +
+        'Se virar chamado, o retorno vai para o WhatsApp que você informou.</div>' +
+        v17HtmlProgresso(V17R.itens) +
+        '<div class="card" style="margin-top:12px"><h3 style="margin-bottom:6px">O que acontece agora</h3>' +
+        '<div class="kv"><span class="k">1</span><span>O responsável ou a Proper confirma o aviso</span></div>' +
+        '<div class="kv"><span class="k">2</span><span>Vira chamado e recebe data prevista</span></div>' +
+        '<div class="kv"><span class="k">3</span><span>O técnico vem com as fotos em mãos</span></div></div>' +
+        (vivo && V17R.midia
+          ? '<div style="margin-top:12px">' + v17HtmlSeletores(Object.assign({}, ctx, { bloqueado: V17R.enviando }), null) + '</div>' +
+            '<button type="button" class="btn gh" id="v17MaisEnviar" style="margin-top:12px"' + (V17R.enviando ? ' disabled' : '') + '>' +
+            (falta ? 'Tentar enviar de novo' : 'Enviar os anexos') + '</button>'
+          : '') +
+        '<p class="lgpd">Pode fechar esta tela.</p>';
+    el.innerHTML = h;
+    v17LigarSeletores(el, ctx, v17PintarRelato);
+    const b = document.getElementById('v17MaisEnviar');
+    if (b) b.onclick = async () => {
+      if (V17R.enviando || !V17R.itens.some(i => i.st !== 'ok')) return;
+      V17R.enviando = true; v17PintarRelato();
+      await v17EnviarMidias('relato', V17R.id, V17R.token, V17R.itens, v17PintarRelato);
+      V17R.enviando = false; v17PintarRelato();
+    };
+    return;
+  }
+  const ab = V17R.fase === 'aberto';
+  h = '<h1>' + (ab ? 'Reforçar o aviso' : 'Relatar problema') + '</h1>' +
+      '<p class="hint">' + (ab ? 'Esta máquina já tem um aviso aberto.' : 'Sem login. Ainda <b>não é uma OS</b>: o responsável da sua empresa e a Proper recebem o aviso.') + '</p>' +
+      '<div class="v17-maq">🛠 <b>' + esc(rot) + '</b></div>';
+  if (ab){
+    h += '<div class="v17-alerta">⚠ Aviso aberto — <b>' + v17Num(V17R.aberto.numero) + '</b>, ' + esc(v17Ha(V17R.aberto.desde)) + ': “' +
+         esc(V17_SINT[V17R.aberto.sintoma] || V17R.aberto.sintoma) + '”' +   /* a descrição não vem mais (auditoria): sem login não se lê o que outro escreveu */
+         (V17R.aberto.plus ? ' · +' + V17R.aberto.plus : '') + '. Não vamos abrir outro.</div>' +
+         '<label for="v17Desc">Quer acrescentar algo? <small style="font-weight:400">(opcional — se for outro problema, descreva aqui)</small></label>' +
+         '<textarea id="v17Desc" rows="3" maxlength="1500" placeholder="Ex.: agora está saindo óleo pela base">' + esc(V17R.desc) + '</textarea>';
+  } else {
+    h += '<label>O que está acontecendo?</label><div class="v17-chips">' +
+         V17_SINTOMAS.map(([k, r]) => '<button type="button" class="v17-chip" data-v17s="' + k + '" aria-pressed="' + (V17R.sintoma === k) + '">' + r + '</button>').join('') +
+         '</div><label for="v17Desc">Descreva em poucas palavras</label>' +
+         '<textarea id="v17Desc" rows="3" maxlength="1500" placeholder="Ex.: desligou sozinho às 8h e o painel mostra E05">' + esc(V17R.desc) + '</textarea>';
+  }
+  h += v17HtmlSeletores(ctx) +
+       '<label for="v17Nome">Seu nome</label><input id="v17Nome" type="text" autocomplete="name" maxlength="80" value="' + esc(V17R.nome) + '">' +
+       '<label for="v17Tel">WhatsApp para retorno</label><input id="v17Tel" type="text" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="(11) 9 8765-4321" value="' + esc(V17R.tel) + '">' +
+       '<div style="height:14px"></div>' +
+       '<button type="button" class="btn" id="v17Enviar"' + (V17R.enviando ? ' disabled' : '') + '>' +
+       (V17R.enviando ? 'Enviando…' : (ab ? '👍 Reforçar o aviso (+1)' : 'Enviar aviso')) + '</button>' +
+       (V17R.erro ? '<div class="erro" role="alert">' + esc(V17R.erro) + '</div>' : '') +
+       v17HtmlProgresso(V17R.itens) +
+       '<p class="lgpd">Seu nome e WhatsApp ficam registrados com o aviso e são vistos pelo responsável da sua empresa e pela Proper. ' +
+       '<a id="v17Voltar">Voltar para o login</a></p>';
+  el.innerHTML = h;
+  el.querySelectorAll('[data-v17s]').forEach(b => b.onclick = () => { v17LerCampos(); V17R.sintoma = b.dataset.v17s; v17PintarRelato(); });
+  v17LigarSeletores(el, ctx, () => { v17LerCampos(); v17PintarRelato(); });
+  document.getElementById('v17Voltar').onclick = () => { v17LerCampos(); mostrar('login'); };
+  document.getElementById('v17Enviar').onclick = v17EnviarRelato;
+}
+async function v17EnviarRelato(){
+  if (V17R.enviando) return;
+  v17LerCampos();
+  const ab = V17R.fase === 'aberto';
+  V17R.erro = '';
+  if (!ab && !V17R.sintoma) V17R.erro = 'Escolha o que está acontecendo.';
+  else if (!ab && V17R.desc.trim().length < 5) V17R.erro = 'Descreva o problema em poucas palavras.';
+  else if (V17R.nome.trim().length < 2) V17R.erro = 'Informe o seu nome.';
+  else if (v17Digitos(V17R.tel).length < 10 || v17Digitos(V17R.tel).length > 13) V17R.erro = 'Informe um WhatsApp com DDD.';
+  if (V17R.erro){ v17PintarRelato(); return; }
+  V17R.enviando = true; v17PintarRelato();
+  try{
+    const r = ab
+      ? await v17Rpc('portal_relato_somar', { p_tag: V14_PEDIDO, p_texto: V17R.desc.trim(), p_nome: V17R.nome.trim(), p_contato: V17R.tel.trim() }, { anon: true })
+      : await v17Rpc('portal_relatar', { p_tag: V14_PEDIDO, p_sintoma: V17R.sintoma, p_descricao: V17R.desc.trim(), p_nome: V17R.nome.trim(), p_contato: V17R.tel.trim() }, { anon: true });
+    if (!r || !r.ok){
+      if (r && r.motivo === 'ja_aberto'){        /* corrida: alguém no pátio mandou antes — vira reforço, sem perder o que foi digitado */
+        V17R.aberto = r.aberto; V17R.fase = 'aberto';
+        V17R.erro = 'Alguém acabou de avisar sobre esta máquina. Confira e toque em "Reforçar" para somar o seu aviso.';
+      } else if (r && r.motivo === 'sem_aberto'){
+        V17R.aberto = null; V17R.fase = 'form';
+        V17R.erro = 'O aviso anterior já foi tratado. Se o problema continua, faça um aviso novo.';
+      } else V17R.erro = (r && r.erro) || 'Não consegui enviar agora. Tente de novo.';
+      V17R.enviando = false; v17PintarRelato(); return;
+    }
+    V17R.token = r.token; V17R.id = r.id; V17R.numero = r.numero; V17R.ate = Date.now() + 28 * 60000;
+    V17R.midia = !!r.midia; V17R.video = !!r.video;
+    v17ls(V17_LS_EU, JSON.stringify({ nome: V17R.nome.trim(), tel: V17R.tel.trim() }));
+    V17R.fase = 'enviado';
+    v17PintarRelato();
+    if (V17R.itens.length) await v17EnviarMidias('relato', V17R.id, V17R.token, V17R.itens, v17PintarRelato);
+  }catch(e){
+    V17R.erro = (e && /Failed to fetch|NetworkError|sem conex/i.test(e.message)) ? 'Sem conexão — o aviso NÃO foi enviado.' : 'Não consegui enviar agora. Tente de novo.';
+  }
+  V17R.enviando = false; v17PintarRelato();
+}
+
+/* ═══ 3 e 4 · CHAMADOS: MÍDIA + RELATOS DA EQUIPE ══════════════════════════ */
+const V17C = { aba: 'chamados', itens: [], enviando: false, erro: '' };
+function v17Badge(n){
+  const b = document.querySelector('nav.side button[data-v="chamados"]'); if (!b) return;
+  let s = document.getElementById('v17ChamCont');
+  if (!s){ s = document.createElement('span'); s.id = 'v17ChamCont';
+    s.style.cssText = 'margin-left:auto;background:var(--or);color:#fff;border-radius:999px;font-size:11px;font-weight:700;padding:1px 7px';
+    b.appendChild(s); }
+  s.textContent = n ? String(n) : ''; s.hidden = !n; s.title = n ? n + ' relato(s) da equipe esperando' : '';
+}
+async function v17AtualizarBadge(){
+  try{
+    const rec = await v17Recursos(); if (!rec.relato || !Dados.empresa) { v17Badge(0); return; }
+    const r = await v17Rpc('portal_relatos', { p_id_cliente: Dados.empresa.id_cliente });
+    v17Badge(r && r.ok ? r.relatos.filter(x => x.aberto).length : 0);
+  }catch(e){ v17Badge(0); }
+}
+function v17CardChamado(c, mids, urls){
+  const html = cardChamado(c);
+  const minis = v17Miniaturas(mids, urls);
+  const pode = V17C.midia && ['fila', 'aprovado'].indexOf(c.status) >= 0;
+  const extra = (c.origem === 'relato' ? '<div class="meta" style="margin-top:6px">↳ nasceu de um aviso da equipe pela placa</div>' : '') + minis +
+    (pode ? '<div class="v17-acoes"><button type="button" class="btn gh sm" data-v17anexar="' + esc(c.id) + '">📎 Anexar foto/vídeo</button></div>' : '');
+  const i = html.lastIndexOf('</article>');
+  return i < 0 ? html : html.slice(0, i) + extra + html.slice(i);
+}
+function v17CardRelato(r, urls){
+  const st = r.status === 'aberto' ? ['c-or', 'Aguardando você'] : r.status === 'confirmado' ? ['c-ok', 'Virou chamado']
+           : r.status === 'juntado' ? ['c-cool', 'Juntado a chamado'] : ['c-mut', 'Descartado'];
+  const zap = v17Digitos(r.contato);
+  return '<article class="card"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center">' +
+    '<span class="meta">' + v17Num(r.numero) + ' · ' + esc(v17Ha(r.criado_em)) + (r.plus ? ' · <b>+' + r.plus + '</b>' : '') + '</span>' +
+    '<span class="chip ' + st[0] + '">' + st[1] + '</span></div>' +
+    '<h3 style="margin:7px 0 2px">' + esc(r.maquina_rotulo || r.tag || '') + '</h3>' +
+    '<p style="font-size:13.5px;margin:4px 0"><b>' + esc(V17_SINT[r.sintoma] || r.sintoma) + '</b> · ' + esc(r.descricao) + '</p>' +
+    '<div class="meta">' + esc(r.nome) + ' · ' + (zap ? '<a href="https://wa.me/' + (zap.length <= 11 ? '55' : '') + zap +
+      '" target="_blank" rel="noopener">WhatsApp ' + esc(r.contato) + '</a>' : esc(r.contato)) + '</div>' +
+    (r.notas || []).map(n => '<div class="v17-nota">' + (n.tipo === 'plus' ? '👍 ' : '💬 ') + esc(n.nome) + ' · ' + esc(v17Ha(n.criado_em)) +
+      (n.texto ? ': ' + esc(n.texto) : ' reforçou o aviso') + '</div>').join('') +
+    v17Miniaturas(r.midias, urls) +
+    (r.status === 'descartado' && r.motivo_descarte ? '<div class="meta" style="margin-top:6px">Motivo: ' + esc(r.motivo_descarte) + '</div>' : '') +
+    (r.aberto ? '<div class="v17-acoes"><button type="button" class="btn sm" data-v17conf="' + esc(r.id) + '">✔ Confirmar → vira chamado</button>' +
+               '<button type="button" class="btn gh sm" data-v17desc="' + esc(r.id) + '">Descartar</button></div>' : '') +
+    '</article>';
+}
+async function telaChamadosV17(){
+  const emp = Dados.empresa && Dados.empresa.id_cliente;
+  const rec = await v17Recursos();
+  V17C.midia = !!rec.midia;
+  const [chs, maqs, relR, mids] = await Promise.all([
+    Dados.chamados(), Dados.maquinas(),
+    rec.relato ? v17Rpc('portal_relatos', { p_id_cliente: emp }).catch(() => null) : Promise.resolve(null),
+    rec.midia ? v17Rpc('portal_chamado_midias', { p_id_cliente: emp }).catch(() => []) : Promise.resolve([])
+  ]);
+  const relatos = (relR && relR.ok && relR.relatos) || [];
+  const abertos = relatos.filter(r => r.aberto).length;
+  v17Badge(abertos);
+  const midsPor = {};
+  (mids || []).forEach(m => { (midsPor[m.chamado_id] = midsPor[m.chamado_id] || []).push(m); });
+  const urls = await v17Assinar([].concat((mids || []).map(m => m.path), ...relatos.map(r => (r.midias || []).map(m => m.path))));
+  if (!rec.relato) V17C.aba = 'chamados';
+  const abas = rec.relato
+    ? '<div class="v17-abas" role="tablist"><button type="button" data-v17aba="chamados" aria-pressed="' + (V17C.aba === 'chamados') + '">Seus chamados</button>' +
+      '<button type="button" data-v17aba="relatos" aria-pressed="' + (V17C.aba === 'relatos') + '">Relatos da equipe' +
+      (abertos ? '<span class="n">' + abertos + '</span>' : '') + '</button></div>'
+    : '';
+  let corpo = '';
+  if (V17C.aba === 'relatos'){
+    corpo = (relR && relR.pode_configurar
+      ? '<label class="v17-conf"><input type="checkbox" id="v17Video"' + (relR.video ? ' checked' : '') + '>' +
+        '<span><b>Permitir vídeo nos avisos pela placa</b><br><small>Até 20 s, gravado pelo celular de quem avisa. Desligado, a equipe manda só fotos.</small></span></label>'
+      : '') +
+      '<p class="sub">Avisos que a equipe fez lendo a placa da máquina, sem login. Confirme para virar chamado, ou descarte com o motivo — quem avisou não é notificado da decisão.</p>' +
+      (relatos.length ? '<div class="grade">' + relatos.map(r => v17CardRelato(r, urls)).join('') + '</div>'
+                      : '<div class="vazio">Nenhum aviso da equipe nos últimos 60 dias.</div>');
+  } else {
+    const ctx = { alvo: 'chamado', itens: V17C.itens, midia: V17C.midia, video: V17C.midia, arquivoVideo: true, bloqueado: V17C.enviando };
+    corpo = '<div class="card" style="margin-bottom:16px" id="v17FormCh"><h3>Abrir chamado</h3>' +
+      '<label for="chMaq">Máquina</label><select id="chMaq"><option value="">— selecione —</option>' +
+        maqs.map(m => '<option value="' + esc(m.maquina_id) + '">' + esc([m.marca, m.modelo].filter(Boolean).join(' ')) +
+          (m.tag ? ' · ' + esc(m.tag) : '') + '</option>').join('') + '</select>' +
+      '<label for="chTxt">O que está acontecendo?</label>' +
+      '<textarea id="chTxt" rows="3" placeholder="Descreva o sintoma: ruído, vazamento, perda de pressão…"></textarea>' +
+      '<div id="v17Sel">' + v17HtmlSeletores(ctx) + '</div>' +
+      '<div style="height:12px"></div>' +
+      '<button class="btn" id="btChamado"' + (V17C.enviando ? ' disabled' : '') + '>Enviar chamado</button>' +
+      '<div id="chErro" class="erro" hidden></div><div id="v17ProgCh">' + v17HtmlProgresso(V17C.itens) + '</div>' +
+      '<p class="lgpd">O chamado entra numa fila e é confirmado pela administração, que define a data prevista. Você recebe a confirmação por aqui.</p></div>' +
+      '<div class="secao"><h2>Seus chamados</h2><span class="tag">' + chs.length + '</span></div>' +
+      (chs.length ? '<div class="grade">' + chs.map(c => v17CardChamado(c, midsPor[c.id], urls)).join('') + '</div>'
+                  : '<div class="vazio">Você ainda não abriu nenhum chamado.</div>');
+  }
+  $('#main').innerHTML = await cabecalho('Chamados', 'Abra um chamado e a administração da Proper confirma a data.') + abas + corpo;
+  const main = $('#main');
+  main.querySelectorAll('[data-v17aba]').forEach(b => b.onclick = () => { V17C.aba = b.dataset.v17aba; irPara('chamados'); });
+  v17LigarMiniaturas(main);
+  if (V17C.aba === 'relatos'){
+    const cb = document.getElementById('v17Video');
+    if (cb) cb.onchange = async () => {
+      cb.disabled = true;
+      try{ const r = await v17Rpc('portal_relato_video', { p_id_cliente: emp, p_on: cb.checked });
+           if (!r || !r.ok) { cb.checked = !cb.checked; v17Aviso((r && r.erro) || 'Não consegui mudar agora.', true); }
+           else v17Aviso(cb.checked ? 'Vídeo liberado nos avisos pela placa.' : 'Vídeo desligado nos avisos pela placa.'); }
+      catch(e){ cb.checked = !cb.checked; v17Aviso('Sem conexão — a alteração NÃO foi gravada.', true); }
+      cb.disabled = false;
+    };
+    main.querySelectorAll('[data-v17conf]').forEach(b => b.onclick = () => v17ConfirmarRelato(relatos.find(r => r.id === b.dataset.v17conf)));
+    main.querySelectorAll('[data-v17desc]').forEach(b => b.onclick = () => v17DescartarRelato(relatos.find(r => r.id === b.dataset.v17desc)));
+    return;
+  }
+  const sel = document.getElementById('v17Sel');
+  const ctx = { alvo: 'chamado', itens: V17C.itens, midia: V17C.midia, video: V17C.midia, arquivoVideo: true, bloqueado: V17C.enviando };
+  const repintarSel = () => { sel.innerHTML = v17HtmlSeletores(ctx); v17LigarSeletores(sel, ctx, repintarSel); };
+  v17LigarSeletores(sel, ctx, repintarSel);
+  $('#btChamado').addEventListener('click', v17EnviarChamado);
+  main.querySelectorAll('[data-v17anexar]').forEach(b => b.onclick = () => v17AnexarAoChamado(b.dataset.v17anexar));
+}
+async function v17EnviarChamado(){
+  if (V17C.enviando) return;
+  const bt = $('#btChamado'), err = $('#chErro');
+  const txt = $('#chTxt').value.trim(), maq = $('#chMaq').value;
+  err.hidden = true;
+  if (txt.length < 10){ err.hidden = false; err.textContent = 'Descreva com um pouco mais de detalhe (ao menos 10 caracteres).'; return; }
+  V17C.enviando = true; bt.disabled = true; bt.textContent = 'Enviando…';
+  let novo = null;
+  try{
+    const r = await Dados.abrirChamado({ descricao: txt, maquina_id: maq || null, origem: 'portal' });
+    novo = Array.isArray(r) ? r[0] : r;
+  }catch(e){
+    V17C.enviando = false; bt.disabled = false; bt.textContent = 'Enviar chamado';
+    err.hidden = false;
+    err.textContent = /5 chamados|24 horas/.test(String(e.message)) ? 'Você já abriu 5 chamados nas últimas 24 horas. Se for urgente, ligue para a Proper.'
+                    : (/Failed to fetch|NetworkError/i.test(String(e.message)) ? 'Sem conexão — o chamado NÃO foi enviado.' : 'Não consegui enviar agora. Tente de novo.');
+    return;
+  }
+  if (novo && novo.id && V17C.itens.length){
+    const prog = document.getElementById('v17ProgCh');
+    const ok = await v17EnviarMidias('chamado', novo.id, null, V17C.itens, () => { if (prog) prog.innerHTML = v17HtmlProgresso(V17C.itens); });
+    if (!ok) v17Aviso('O chamado foi aberto, mas algum anexo não subiu. Use "📎 Anexar" no card do chamado para tentar de novo.', true);
+  }
+  V17C.itens.forEach(i => { try{ if (i.thumb) URL.revokeObjectURL(i.thumb); }catch(e){} });
+  V17C.itens = []; V17C.enviando = false;
+  await telaChamadosV17();
+}
+function v17AnexarAoChamado(id){
+  const ctx = { alvo: 'chamado', itens: [], midia: true, video: true, arquivoVideo: true, bloqueado: false };
+  modal('Anexar ao chamado', '<div id="v17AnxSel"></div><div id="v17AnxProg"></div>' +
+    '<button type="button" class="btn" id="v17AnxOk" style="margin-top:14px">Enviar anexos</button>' +
+    '<p class="lgpd">Até 5 fotos e 2 vídeos por chamado, contando os que já foram.</p>');
+  const sel = document.getElementById('v17AnxSel');
+  const rep = () => { sel.innerHTML = v17HtmlSeletores(ctx); v17LigarSeletores(sel, ctx, rep); };
+  rep();
+  const bt = document.getElementById('v17AnxOk');
+  bt.onclick = async () => {
+    if (!ctx.itens.length) { v17Aviso('Escolha uma foto ou grave um vídeo.'); return; }
+    bt.disabled = true; bt.textContent = 'Enviando…'; ctx.bloqueado = true; rep();
+    const ok = await v17EnviarMidias('chamado', id, null, ctx.itens, () => { const p = document.getElementById('v17AnxProg'); if (p) p.innerHTML = v17HtmlProgresso(ctx.itens); });
+    if (ok){ $('#modal').classList.remove('on'); v17Aviso('Anexos enviados.'); await telaChamadosV17(); }
+    else { bt.disabled = false; bt.textContent = 'Tentar de novo'; }
+  };
+}
+function v17ConfirmarRelato(r){
+  if (!r) return;
+  const base = 'Aviso ' + v17Num(r.numero) + ' (' + r.nome + ', ' + r.contato + '): ' + (V17_SINT[r.sintoma] || r.sintoma) + ' — ' + r.descricao +
+    (r.notas || []).filter(n => n.texto).map(n => '\n+ ' + n.nome + ': ' + n.texto).join('');
+  modal('Confirmar o aviso ' + v17Num(r.numero),
+    '<p class="sub" style="margin:0 0 8px">Vira um chamado da sua empresa, com as fotos e vídeos do aviso. Revise o texto:</p>' +
+    '<textarea id="v17ConfTxt" rows="5" maxlength="2000">' + esc(base.slice(0, 2000)) + '</textarea>' +
+    '<button type="button" class="btn" id="v17ConfOk" style="margin-top:12px">Confirmar e abrir chamado</button>' +
+    '<div id="v17ConfErr" class="erro" hidden></div>');
+  const bt = document.getElementById('v17ConfOk');
+  bt.onclick = async () => {
+    const t = document.getElementById('v17ConfTxt').value.trim(), er = document.getElementById('v17ConfErr');
+    if (t.length < 10){ er.hidden = false; er.textContent = 'O texto do chamado precisa de ao menos 10 caracteres.'; return; }
+    bt.disabled = true; bt.textContent = 'Confirmando…';
+    try{
+      const x = await v17Rpc('portal_relato_confirmar', { p_relato: r.id, p_descricao: t });
+      if (!x || !x.ok){ er.hidden = false; er.textContent = (x && x.erro) || 'Não consegui confirmar agora.'; bt.disabled = false; bt.textContent = 'Confirmar e abrir chamado'; return; }
+      $('#modal').classList.remove('on'); v17Aviso('Aviso confirmado — virou chamado na fila da Proper.');
+      V17C.aba = 'chamados'; await telaChamadosV17();
+    }catch(e){ er.hidden = false; er.textContent = 'Sem conexão — NÃO foi confirmado.'; bt.disabled = false; bt.textContent = 'Confirmar e abrir chamado'; }
+  };
+}
+function v17DescartarRelato(r){
+  if (!r) return;
+  modal('Descartar o aviso ' + v17Num(r.numero),
+    '<p class="sub" style="margin:0 0 8px">Fica registrado quem descartou e por quê. A Proper também vê.</p>' +
+    '<label for="v17DescMot">Motivo</label><input type="text" id="v17DescMot" maxlength="300" placeholder="Ex.: era o dreno em ciclo normal">' +
+    '<button type="button" class="btn" id="v17DescOk" style="margin-top:12px">Descartar</button><div id="v17DescErr" class="erro" hidden></div>');
+  const bt = document.getElementById('v17DescOk');
+  bt.onclick = async () => {
+    const m = document.getElementById('v17DescMot').value.trim(), er = document.getElementById('v17DescErr');
+    if (m.length < 5){ er.hidden = false; er.textContent = 'Escreva o motivo (ao menos 5 caracteres).'; return; }
+    bt.disabled = true;
+    try{
+      const x = await v17Rpc('portal_relato_descartar', { p_relato: r.id, p_motivo: m });
+      if (!x || !x.ok){ er.hidden = false; er.textContent = (x && x.erro) || 'Não consegui descartar agora.'; bt.disabled = false; return; }
+      $('#modal').classList.remove('on'); v17Aviso('Aviso descartado.'); await telaChamadosV17();
+    }catch(e){ er.hidden = false; er.textContent = 'Sem conexão — NÃO foi descartado.'; bt.disabled = false; }
+  };
+}
+
+/* ═══ LIGAÇÃO ══════════════════════════════════════════════════════════════
+   Mesmas regras do V14: nada é renomeado; as funções antigas continuam no
+   arquivo e o nome global passa a apontar para a versão nova. */
+telaChamados = telaChamadosV17;
+(function(){
+  const orig = escolherEmpresa;
+  escolherEmpresa = async function(){ const r = await orig.apply(this, arguments); try{ v17AtualizarBadge(); }catch(e){} return r; };
+  const sair = document.getElementById('btSair');
+  if (sair) sair.addEventListener('click', () => { V17C.itens = []; V17C.aba = 'chamados'; v17Badge(0); });
+})();
+(async function v17Boot(){
+  try{
+    if (await v17ReceberCracha()) return;          /* chegada pelo Hub: só reconhece e volta */
+    if (await v17PlacaComCracha()) return;         /* celular da equipe: vai para a ficha */
+    await v17CartaoLogin();                        /* cliente/funcionário: cartão de relato */
+  }catch(e){ try{ console.warn('[V17] boot', e); }catch(_){} }
+})();
+</script>
+<!-- ████ FIM PORTAL_V17 ████ -->
 </body>
 </html>

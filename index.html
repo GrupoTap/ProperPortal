@@ -92,6 +92,17 @@
 -->
 <!--
   ══════════════════════════════════════════════════════════════════════
+  PORTAL_V19 — ONDE ESTÁ A SUA MÁQUINA (linha do tempo da oficina)   16/11/2026
+  ══════════════════════════════════════════════════════════════════════
+  ProperCare-backlog#194 (parte 9 da Esteira da Oficina, #197; estudo #185, P6, L10 e D8). Na janela da OS
+  da oficina, abaixo da situação: a frase da estação de agora com desde quando e as estações (feita com
+  o dia, a de agora, as que faltam). Lida de portal_oficina_linha (só a OS que o usuário enxerga; só nome,
+  dia e frase). 🔴 SQL ANTES: 140_OFICINA_LINHA (cadeia do backlog). Zero GAS. Bloco PORTAL_V19 no fim do
+  body (embrulha abrirOS). Chave de volta portal_v19 = off.
+  ══════════════════════════════════════════════════════════════════════
+-->
+<!--
+  ══════════════════════════════════════════════════════════════════════
   PORTAL_V18 — PWAIT v4: A GUARDA SÓ PROTEGE O QUE O USUÁRIO VÊ   27/09/2026
   ══════════════════════════════════════════════════════════════════════
   Fernando, 27/09 (PCM, "Editar peça"): o botão Salvar já abria girando,
@@ -118,7 +129,8 @@
   PORTAL DO CLIENTE — Proper Compressores                        15/08/2026
   portal.propercompressores.com.br
 
-  build PORTAL_V18 · 27/09/2026
+  build PORTAL_V19 · 16/11/2026
+  (contém o PORTAL_V18 · 27/09/2026)
   (contém o PORTAL_V17 · 26/09/2026)
   (contém o PORTAL_V16 · 26/09/2026)
   (contém o PORTAL_V15 · 22/09/2026)
@@ -4564,5 +4576,100 @@ telaChamados = telaChamadosV17;
 })();
 </script>
 <!-- ████ FIM PORTAL_V17 ████ -->
+<!-- ████ INICIO PORTAL_V19 ████ -->
+<style id="v19-css">
+/* PORTAL_V19 (ProperCare-backlog#194): onde está a sua máquina na oficina, na janela da OS. Chave de volta: localStorage portal_v19 = off */
+.v19-lin{margin:6px 0 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface-2);padding:10px 12px}
+.v19-frase{font-size:14px;font-weight:600;color:var(--ink);margin:0 0 2px}
+.v19-desde{font-size:12px;color:var(--ink-3);margin:0 0 8px}
+.v19-lista{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:2px 14px}
+.v19-lista li{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-2);min-height:24px}
+.v19-p{flex:0 0 auto;width:16px;height:16px;border-radius:50%;border:2px solid var(--line);background:var(--surface);box-sizing:border-box}
+.v19-lista li.f .v19-p{background:var(--char);border-color:var(--char)}
+.v19-lista li.a{color:var(--ink);font-weight:700}
+.v19-lista li.a .v19-p{background:var(--or);border-color:var(--or);box-shadow:0 0 0 3px var(--or-tint)}
+.v19-lista li.s{color:var(--ink-3)}
+.v19-lista li.s .v19-p{background:var(--line);border-color:var(--line)}
+.v19-lista li.u{color:var(--ink-3)}
+.v19-lista .v19-d{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--ink-3);font-weight:400;white-space:nowrap}
+.v19-esq{height:54px;border-radius:var(--r);background:linear-gradient(90deg,var(--line-2) 25%,var(--surface-2) 50%,var(--line-2) 75%);background-size:200% 100%;animation:v19esq 1.2s infinite;margin:6px 0 12px}
+@keyframes v19esq{0%{background-position:200% 0}100%{background-position:-200% 0}}
+</style>
+<script id="v19Js">
+'use strict';
+/* ═════════════════════════════════════════════════════════════════════════════════════
+   PORTAL_V19 · ProperCare-backlog#194 (parte 9 da Esteira da Oficina, #197; estudo #185, P6, L10 e D8) — onde está a sua máquina.
+   · Janela da OS (Ordens de serviço › tocar numa OS da oficina): logo abaixo da situação, "Onde está a sua máquina": a frase da
+     estação de agora ("Aprovado: aguardando as peças para começar.") com desde quando, e as estações — ✓ feita com o dia, ● a de
+     agora, ○ as que faltam (sem data no histórico = cinza, sem dia). Devolução sem reparo e "saiu da oficina" no lugar delas.
+   · Lida do banco por portal_oficina_linha (1 chamada ao abrir a OS da oficina; a OS feita na empresa do cliente não chama). O banco
+     só entrega a OS que este usuário enxerga e só o nome, o dia e a frase — nada interno. Sem resposta: a janela fica como antes.
+   Linha pré-existente alterada: nenhuma — embrulha abrirOS. Chave de volta: localStorage portal_v19 = off.
+   ═════════════════════════════════════════════════════════════════════════════════════ */
+(function () {
+  if (window.V19) return;
+  const V19 = window.V19 = { versao: 'PORTAL_V19', ger: 0, ultimo: null, erro: '' };
+  function off(){ try{ return localStorage.getItem('portal_v19') === 'off'; }catch(e){ return false; } }
+  V19.off = off;
+  function E(v){ return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[c]); }
+  function dia(iso){ const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || '')); return m ? m[3] + '/' + m[2] : ''; }
+  function daOficina(o){ return !!o && /^intern/i.test(String(o.local_atendimento || '').trim()); }
+  V19.daOficina = daOficina;
+
+  function html(d){
+    if (!d || d.ok !== true || !d.oficina || !Array.isArray(d.estacoes)) return '';
+    const a = d.atual || null, dev = d.devolucao || null;
+    let frase = '', desde = '';
+    if (a){ frase = a.frase || a.nome; desde = dia(a.desde) ? 'Desde ' + dia(a.desde) : ''; }
+    else if (d.saiu_em){ frase = 'Sua máquina já saiu da oficina.'; desde = 'Em ' + dia(d.saiu_em); }
+    else return '';
+    let h = '<div class="secao"><h2>Onde está a sua máquina</h2></div><div class="v19-lin" id="v19Lin">' +
+      '<p class="v19-frase">' + E(frase) + '</p>' + (desde ? '<p class="v19-desde">' + E(desde) + '</p>' : '') + '<ol class="v19-lista">';
+    d.estacoes.forEach(e => {
+      if (e.estado === 'fora') return;
+      const c = ({ feita:'f', atual:'a', sem_registro:'s', futura:'u' })[e.estado] || 'u';
+      h += '<li class="' + c + '" data-v19-n="' + E(e.n) + '"><span class="v19-p" aria-hidden="true"></span><span>' + E(e.nome) + '</span>' +
+           (e.data ? '<span class="v19-d">' + E(dia(e.data)) + '</span>' : '') + '</li>';
+    });
+    if (dev) h += '<li class="' + (dev.estado === 'atual' ? 'a' : 'f') + '" data-v19-n="0"><span class="v19-p" aria-hidden="true"></span><span>' + E(dev.nome) +
+                  '</span>' + (dev.data ? '<span class="v19-d">' + E(dia(dev.data)) + '</span>' : '') + '</li>';
+    if (!a && d.saiu_em) h += '<li class="f" data-v19-n="saiu"><span class="v19-p" aria-hidden="true"></span><span>Saiu da oficina</span><span class="v19-d">' + E(dia(d.saiu_em)) + '</span></li>';
+    return h + '</ol></div>';
+  }
+  V19.html = html;
+
+  async function pintar(id){
+    const ger = ++V19.ger;
+    const corpo = document.getElementById('mdCorpo'); if (!corpo) return;
+    const chip = corpo.querySelector('.chip'), alvo = chip && chip.parentNode && chip.parentNode.parentNode === corpo ? chip.parentNode : null;
+    if (!alvo) return;
+    const caixa = document.createElement('div'); caixa.id = 'v19Caixa'; caixa.innerHTML = '<div class="v19-esq" aria-label="Carregando onde está a sua máquina"></div>';
+    alvo.insertAdjacentElement('afterend', caixa);
+    let d = null;
+    try { d = await v17Rpc('portal_oficina_linha', { p_os: id }, { ms: 12000 }); V19.erro = ''; }
+    catch (e) { V19.erro = String((e && e.message) || e); try { console.warn('[PORTAL_V19] onde está a máquina:', V19.erro); } catch (x) {} }
+    V19.ultimo = d;
+    if (ger !== V19.ger || !caixa.isConnected) return;         // outra OS foi aberta (ou a janela fechou) no meio da espera
+    const h = html(d);
+    if (!h) { caixa.remove(); return; }
+    caixa.innerHTML = h;
+  }
+  V19.pintar = pintar;
+
+  const orig = window.abrirOS;
+  if (typeof orig === 'function') {
+    window.abrirOS = async function (id) {
+      const r = await orig.apply(this, arguments);
+      try {
+        const o = (typeof CACHE !== 'undefined' && CACHE.os || []).find(x => x.id_os === id);
+        if (!off() && daOficina(o)) pintar(id); else V19.ger++;   // sem await: a janela não espera a rede (a geração cuida da corrida)
+      } catch (e) { try { console.warn('[PORTAL_V19] abrirOS:', e && e.message); } catch (x) {} }
+      return r;
+    };
+  }
+  V19.ok = true;
+})();
+</script>
+<!-- ████ FIM PORTAL_V19 ████ -->
 </body>
 </html>
